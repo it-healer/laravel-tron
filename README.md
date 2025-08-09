@@ -1,4 +1,4 @@
-![Pest Laravel Expectations](https://banners.beyondco.de/Laravel%20TRON.png?theme=light&packageManager=composer+require&packageName=it-healer%2Flaravel-tron&pattern=architect&style=style_1&description=Tron+Wallet+Library+for+Laravel&md=1&showWatermark=0&fontSize=100px&images=https%3A%2F%2Flaravel.com%2Fimg%2Flogomark.min.svg)
+![Logo](docs/logo.jpeg)
 
 <a href="https://packagist.org/packages/it-healer/laravel-tron" target="_blank">
     <img style="display: inline-block; margin-top: 0.5em; margin-bottom: 0.5em" src="https://img.shields.io/packagist/v/it-healer/laravel-tron.svg?style=flat&cacheSeconds=3600" alt="Latest Version on Packagist">
@@ -10,7 +10,7 @@
 
 ---
 
-**Laravel Tron** is a Laravel package for work with cryptocurrency Tron, with the support TRC-20 tokens.It allows you to generate HD wallets using mnemonic phrase, validate addresses, get addresses balances and resources, preview and send TRX/TRC-20 tokens. You can automate the acceptance and withdrawal of cryptocurrency in your application.
+**Tron** is a Laravel package for work with cryptocurrency Tron, with the support TRC-20 tokens.It allows you to generate HD wallets using mnemonic phrase, validate addresses, get addresses balances and resources, preview and send TRX/TRC-20 tokens. You can automate the acceptance and withdrawal of cryptocurrency in your application.
 
 ## Requirements
 
@@ -163,6 +163,12 @@ Create TRC-20 Token
 ```bash
 php artisan tron:new-trc20
 ```
+
+## Support
+
+- Telegram: [@biodynamist](https://t.me/biodynamist)
+- WhatsApp: [+905516294716](https://wa.me/905516294716)
+- Web: [it-healer.com](https://it-healer.com)
 
 ## Changelog
 
