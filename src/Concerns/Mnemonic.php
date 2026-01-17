@@ -2,8 +2,8 @@
 
 namespace ItHealer\LaravelTron\Concerns;
 
-use FurqanSiddiqui\BIP39\BIP39;
-use FurqanSiddiqui\BIP39\Language\English;
+use ItHealer\LaravelTron\BIP39\BIP39;
+use ItHealer\LaravelTron\BIP39\Language\English;
 
 trait Mnemonic
 {
