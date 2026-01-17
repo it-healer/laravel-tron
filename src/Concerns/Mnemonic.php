@@ -35,7 +35,7 @@ trait Mnemonic
         return true;
     }
 
-    public function mnemonicSeed(string|array $mnemonic, string $passphrase = null): string
+    public function mnemonicSeed(string|array $mnemonic, ?string $passphrase = null): string
     {
         if (!is_array($mnemonic)) {
             $mnemonic = explode(' ', $mnemonic);

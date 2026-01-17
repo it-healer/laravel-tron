@@ -27,10 +27,21 @@
     "simplito/elliptic-php": "^1.0",
     "brick/math": ">=0.12"
   },
+  "require-dev": {
+    "phpunit/phpunit": "^10.0|^11.0"
+  },
   "autoload": {
     "psr-4": {
       "ItHealer\\LaravelTron\\": "src"
     }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "ItHealer\\LaravelTron\\Tests\\": "tests"
+    }
+  },
+  "scripts": {
+    "test": "vendor/bin/phpunit"
   },
   "extra": {
     "laravel": {
