@@ -62,28 +62,41 @@ class Transfer
                 $activateFee = AmountHelper::sunToDecimal(100000);
                 $balanceAfter = $balanceAfter->minus($activateFee);
             }
+
+            // Не прерываем расчёт при нехватке баланса: продолжаем считать комиссии,
+            // чтобы вызывающий код мог показать, сколько TRX требуется для перевода.
+            $insufficientBalance = $balanceAfter->isNegative();
+
+            try {
+                $transaction = $this->api->manager->request('wallet/createtransaction', null, [
+                    'owner_address' => AddressHelper::toHex($this->from),
+                    'to_address' => AddressHelper::toHex($this->to),
+                    'amount' => AmountHelper::decimalToSun($this->amount),
+                ]);
+
+                $bandwidthRequired = $to->activated ? strlen($transaction['raw_data_hex']) + 1 : 0;
+                if( $bandwidthBefore === null ) {
+                    $bandwidthBefore = $fromResources->bandwidthAvailable;
+                }
+                if( $bandwidthRequired > $bandwidthBefore ) {
+                    $bandwidthFee = AmountHelper::sunToDecimal(($bandwidthRequired + 1) * 1000);
+                    $balanceAfter = $balanceAfter->minus($bandwidthFee);
+                    $bandwidthAfter = 0;
+                }
+                else {
+                    $bandwidthFee = BigDecimal::of(0);
+                    $bandwidthAfter = $bandwidthBefore - $bandwidthRequired;
+                }
+            } catch (\Exception $e) {
+                // Нода может отклонить создание транзакции при нехватке баланса —
+                // в этом случае сохраняем понятную ошибку и уже рассчитанные данные
+                if (! $insufficientBalance) {
+                    throw $e;
+                }
+            }
+
             if ($balanceAfter->isNegative()) {
                 throw new \Exception('Insufficient balance');
-            }
-
-            $transaction = $this->api->manager->request('wallet/createtransaction', null, [
-                'owner_address' => AddressHelper::toHex($this->from),
-                'to_address' => AddressHelper::toHex($this->to),
-                'amount' => AmountHelper::decimalToSun($this->amount),
-            ]);
-
-            $bandwidthRequired = $to->activated ? strlen($transaction['raw_data_hex']) + 1 : 0;
-            if( $bandwidthBefore === null ) {
-                $bandwidthBefore = $fromResources->bandwidthAvailable;
-            }
-            if( $bandwidthRequired > $bandwidthBefore ) {
-                $bandwidthFee = AmountHelper::sunToDecimal(($bandwidthRequired + 1) * 1000);
-                $balanceAfter = $balanceAfter->minus($bandwidthFee);
-                $bandwidthAfter = 0;
-            }
-            else {
-                $bandwidthFee = BigDecimal::of(0);
-                $bandwidthAfter = $bandwidthBefore - $bandwidthRequired;
             }
         } catch (\Exception $e) {
             $error = $e->getMessage();
