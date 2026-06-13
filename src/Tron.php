@@ -18,6 +18,12 @@ class Tron
     use Node, Mnemonic, Wallet, Address, TRC20, Transfer;
 
     /**
+     * Default BIP-44 derivation path template for TRON (coin type 195).
+     * The {index} placeholder is replaced with the address index.
+     */
+    public const PATH_BIP44 = "m/44'/195'/0'/0/{index}";
+
+    /**
      * @param TronModel $model
      * @return class-string<Model>
      */

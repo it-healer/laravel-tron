@@ -24,6 +24,8 @@ return new class extends Migration {
                 ->nullable();
             $table->text('seed')
                 ->nullable();
+            $table->string('derivation_path')
+                ->default("m/44'/195'/0'/0/{index}");
             $table->timestamp('sync_at')
                 ->nullable();
             $table->decimal('balance', 20, 6)

@@ -21,6 +21,7 @@ class TronWallet extends Model
         'password',
         'mnemonic',
         'seed',
+        'derivation_path',
         'sync_at',
         'balance',
         'trc20'

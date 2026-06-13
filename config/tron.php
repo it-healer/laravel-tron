@@ -25,6 +25,18 @@ return [
     'webhook_handler' => \ItHealer\LaravelTron\Handlers\EmptyWebhookHandler::class,
 
     /*
+     * Wallet settings.
+     */
+    'wallet' => [
+        /*
+         * Default BIP-44 derivation path template used when creating a wallet.
+         * The {index} placeholder is replaced with the address index.
+         * TRON coin type is 195. Preset: Tron::PATH_BIP44.
+         */
+        'default_derivation_path' => "m/44'/195'/0'/0/{index}",
+    ],
+
+    /*
      * Set model class for both TronWallet, TronAddress, TronTrc20,
      * to allow more customization.
      *

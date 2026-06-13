@@ -16,6 +16,7 @@ trait Wallet
         ?string $password = null,
         ?bool $savePassword = true,
         ?TronNode $node = null,
+        ?string $derivationPath = null,
     ): TronWallet {
         if (is_array($mnemonic)) {
             $mnemonic = implode(" ", $mnemonic);
@@ -30,6 +31,7 @@ trait Wallet
             'node_id' => $node?->id,
             'name' => $name,
         ]);
+        $wallet->derivation_path = $this->walletDerivationPath($derivationPath);
         $wallet->unlockWallet($password);
         if ($savePassword) {
             $wallet->password = $password;
@@ -47,6 +49,7 @@ trait Wallet
         ?string $password = null,
         ?bool $savePassword = true,
         ?TronNode $node = null,
+        ?string $derivationPath = null,
     ): TronWallet {
         $mnemonic = Tron::mnemonicGenerate($mnemonicSize ?? 18);
         $seed = Tron::mnemonicSeed($mnemonic, $passphrase);
@@ -58,6 +61,7 @@ trait Wallet
             'node_id' => $node?->id,
             'name' => $name,
         ]);
+        $wallet->derivation_path = $this->walletDerivationPath($derivationPath);
         $wallet->unlockWallet($password);
         if ($savePassword) {
             $wallet->password = $password;
@@ -73,6 +77,7 @@ trait Wallet
         ?string $password = null,
         ?bool $savePassword = true,
         ?TronNode $node = null,
+        ?string $derivationPath = null,
     ): TronWallet {
         /** @var class-string<TronWallet> $walletModel */
         $walletModel = Tron::getModel(TronModel::Wallet);
@@ -81,6 +86,7 @@ trait Wallet
             'node_id' => $node?->id,
             'name' => $name,
         ]);
+        $wallet->derivation_path = $this->walletDerivationPath($derivationPath);
         $wallet->unlockWallet($password);
         if ($savePassword) {
             $wallet->password = $password;
@@ -96,6 +102,7 @@ trait Wallet
         string|array|int|null $mnemonic = null,
         ?string $passphrase = null,
         ?TronNode $node = null,
+        ?string $derivationPath = null,
     ): TronWallet {
         if (is_string($mnemonic)) {
             $mnemonic = explode(' ', $mnemonic);
@@ -112,6 +119,7 @@ trait Wallet
             'node_id' => $node?->id,
             'name' => $name,
         ]);
+        $wallet->derivation_path = $this->walletDerivationPath($derivationPath);
         $wallet->unlockWallet($password);
         if ($savePassword) {
             $wallet->password = $password;
@@ -123,5 +131,22 @@ trait Wallet
         Tron::createAddress($wallet, 'Primary Address', 0);
 
         return $wallet;
+    }
+
+    /**
+     * Validates the wallet derivation path template, falling back to the configured default.
+     */
+    protected function walletDerivationPath(?string $derivationPath): string
+    {
+        $derivationPath ??= config(
+            'tron.wallet.default_derivation_path',
+            \ItHealer\LaravelTron\Tron::PATH_BIP44
+        );
+
+        if (!Tron::validateDerivationPath($derivationPath)) {
+            throw new \InvalidArgumentException("Invalid derivation path template: {$derivationPath}");
+        }
+
+        return $derivationPath;
     }
 }
