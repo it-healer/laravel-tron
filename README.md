@@ -446,23 +446,33 @@ Update `config/tron.php`:
 ],
 ```
 
-### Touch Synchronization System (TSS)
+### Touch Synchronization System (TSS) — adaptive sync
 
-For applications with many addresses, enable TSS to optimize synchronization:
+For applications with many addresses, enable TSS so addresses are polled **often while in use
+and rarely while idle**, instead of every run. An address is "active" for `waiting_seconds`
+after its last `touch_at`; while active it syncs no more often than `fast_interval`, while idle
+no more often than `slow_interval`.
 
 ```php
 // In config/tron.php
 'touch' => [
     'enabled' => true,
-    'waiting_seconds' => 3600, // Sync for 1 hour after touch
+    'waiting_seconds' => 1800, // stay "active" 30 min after last touch
+    'fast_interval' => 60,     // while active: at most once per 60s
+    'slow_interval' => 3600,   // while idle: at most once per hour (null = skip idle entirely)
 ],
 ```
 
-Touch an address when user activity is detected:
+Mark activity by updating `touch_at` when the wallet is used (GUI view, API call, unlock):
 
 ```php
-$address->touch(); // Updates touch_at timestamp
+$address->update(['touch_at' => now()]);
+// or in bulk for a wallet:
+$wallet->addresses()->update(['touch_at' => now()]);
 ```
+
+Defaults (`fast_interval` 0, `slow_interval` null) preserve the legacy behavior: active
+addresses sync every run, idle ones are skipped. `tron:address-sync --force` bypasses the schedule.
 
 ### Multiple Derivation Paths
 
