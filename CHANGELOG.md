@@ -2,6 +2,15 @@
 
 All notable changes to `laravel-tron` will be documented in this file.
 
+## v1.2.0 - 2026-06-15
+
+### Added
+
+- Alchemy as a Tron RPC node via `Tron::createAlchemyNode()`. RPC calls (balances, resources,
+  `triggerconstantcontract`, broadcast) go to Alchemy; address-history endpoints (`v1/accounts/...`,
+  which Alchemy doesn't serve) are routed to a separate `index_node` (TronGrid) so deposit detection
+  keeps working. New nullable `index_node` column on `tron_nodes`; `ApiManager` routes `v1/*` to it.
+
 ## v1.1.0 - 2026-06-15
 
 ### Added

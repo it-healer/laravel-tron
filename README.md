@@ -263,6 +263,24 @@ $node = Tron::createTronGridNode($apiKey, 'Node Name');
 $node = Tron::createNode('Node Name', 'https://api.trongrid.io');
 ```
 
+#### Alchemy as RPC node
+
+Alchemy can serve Tron **RPC** (balances, account resources, `triggerconstantcontract`,
+broadcast), but **not** the TronGrid address-history endpoints (`v1/accounts/.../transactions`).
+`createAlchemyNode()` points RPC at Alchemy and keeps history (and therefore deposit detection)
+on TronGrid via a separate indexer provider — pass your TronGrid API key for that:
+
+```php
+$node = Tron::createAlchemyNode(
+    apiKey: 'YOUR_ALCHEMY_KEY',
+    name: 'alchemy',
+    tronGridApiKey: 'YOUR_TRONGRID_KEY', // used only for v1 history; omit to fall back to Alchemy
+);
+```
+
+Under the hood the node stores an optional `index_node` ({url, headers}); `ApiManager` routes
+`v1/*` requests to it when set, everything else to the RPC node.
+
 #### Get Node Information
 
 ```php

@@ -26,6 +26,7 @@ class Api
         ?HttpProvider $eventServer = null,
         ?HttpProvider $signServer = null,
         ?HttpProvider $explorer = null,
+        ?HttpProvider $indexer = null,
     ) {
         $this->manager = new ApiManager(
             compact(
@@ -33,7 +34,8 @@ class Api
                 'solidityNode',
                 'eventServer',
                 'signServer',
-                'explorer'
+                'explorer',
+                'indexer'
             )
         );
 

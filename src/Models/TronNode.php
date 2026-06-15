@@ -18,6 +18,7 @@ class TronNode extends Model
         'title',
         'full_node',
         'solidity_node',
+        'index_node',
         'block_number',
         'requests',
         'requests_at',
@@ -29,6 +30,7 @@ class TronNode extends Model
     protected $casts = [
         'full_node' => 'json',
         'solidity_node' => 'json',
+        'index_node' => 'json',
         'block_number' => 'integer',
         'requests' => 'integer',
         'requests_at' => 'date',
@@ -64,12 +66,27 @@ class TronNode extends Model
                 proxy: $this->solidity_node['proxy'] ?? null,
             );
 
+            // Optional separate provider for indexer (v1/accounts/...) endpoints, so a node
+            // can use an RPC provider that lacks them (e.g. Alchemy) while transaction history
+            // is still served by TronGrid. Falls back to fullNode when not configured.
+            $indexNode = null;
+            if (!empty($this->index_node['url'])) {
+                $indexNode = new HttpProvider(
+                    baseUri: $this->index_node['url'],
+                    headers: $this->index_node['headers'] ?? [],
+                    user: $this->index_node['username'] ?? null,
+                    password: $this->index_node['password'] ?? null,
+                    proxy: $this->index_node['proxy'] ?? null,
+                );
+            }
+
             /** @var class-string<Api> $model */
             $model = config('tron.models.api');
 
             $this->_api = new $model(
                 fullNode: $fullNode,
-                solidityNode: $solidityNode
+                solidityNode: $solidityNode,
+                indexer: $indexNode,
             );
         }
 

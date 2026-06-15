@@ -87,6 +87,11 @@ class ApiManager
         return $this->getProvider('signServer', 'Sign server');
     }
 
+    public function indexer(): ?HttpProvider
+    {
+        return $this->providers['indexer'] ?? null;
+    }
+
     public function isConnected(): array
     {
         $array = [];
@@ -112,6 +117,10 @@ class ApiManager
             $provider = $this->signServer();
         } elseif (in_array($split[0], ['api'])) {
             $provider = $this->explorer();
+        } elseif ($split[0] === 'v1' && $this->indexer()) {
+            // Address-indexed history (v1/accounts/...) — use the dedicated indexer
+            // provider (e.g. TronGrid) when set; otherwise it falls through to fullNode.
+            $provider = $this->indexer();
         }
 
         if ($get) {
