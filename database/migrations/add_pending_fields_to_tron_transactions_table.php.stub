@@ -1,0 +1,22 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::table('tron_transactions', function (Blueprint $table) {
+            $table->decimal('fee', 20, 6)->nullable()->after('amount');
+            $table->timestamp('dropped_at')->nullable()->after('block_number');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('tron_transactions', function (Blueprint $table) {
+            $table->dropColumn(['fee', 'dropped_at']);
+        });
+    }
+};

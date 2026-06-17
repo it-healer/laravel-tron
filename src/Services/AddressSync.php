@@ -66,7 +66,32 @@ class AddressSync extends BaseSync
             ->accountWithResources()
             ->trc20Balances()
             ->transactions()
+            ->reconcilePending()
             ->runWebhooks();
+    }
+
+    /**
+     * Drop broadcast-but-still-pending outgoing transfers that never confirmed within the
+     * TTL, so a stuck/dropped transaction stops being subtracted from the available balance
+     * forever. Confirmed transfers leave the pending set automatically once the explorer
+     * returns them with a block_number. Tron has no account nonce, so TTL is the safety net.
+     */
+    protected function reconcilePending(): self
+    {
+        $ttlMinutes = config('tron.pending.ttl_minutes');
+        if ($ttlMinutes === null) {
+            return $this;
+        }
+
+        $threshold = Date::now()->copy()->subMinutes((int) $ttlMinutes);
+
+        TronTransaction::query()
+            ->pendingOutgoing()
+            ->where('address', $this->address->address)
+            ->where('time_at', '<', $threshold)
+            ->update(['dropped_at' => Date::now()]);
+
+        return $this;
     }
 
     /**

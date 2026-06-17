@@ -38,6 +38,19 @@ return [
     'webhook_handler' => \ItHealer\LaravelTron\Handlers\EmptyWebhookHandler::class,
 
     /*
+     * Broadcast-but-unconfirmed outgoing transfers are subtracted from the confirmed
+     * balance to show a truthful "available" balance. They leave the pending set once
+     * the explorer returns them confirmed. Tron has no account nonce, so `ttl_minutes`
+     * is the safety net: a pending transfer older than this stops being subtracted
+     * (null disables the TTL).
+     */
+    'pending' => [
+        'ttl_minutes' => env('TRON_PENDING_TTL_MINUTES') !== null
+            ? (int) env('TRON_PENDING_TTL_MINUTES')
+            : 120,
+    ],
+
+    /*
      * Wallet settings.
      */
     'wallet' => [
