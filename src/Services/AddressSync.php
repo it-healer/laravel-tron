@@ -271,6 +271,27 @@ class AddressSync extends BaseSync
             'debug_data' => $transfer->toArray(),
         ]);
 
+        /*
+         * The TRC-20 transfers endpoint does not return the block number, so an outgoing
+         * transfer would otherwise keep block_number = null forever and stay "pending"
+         * even after it is confirmed on-chain. Resolve it once via a dedicated lookup so
+         * the transfer leaves the pending set as soon as the explorer reports it.
+         * (Incoming transfers resolve their block number through the deposit branch below.)
+         */
+        if ($type === TronTransactionType::OUTGOING && ! $transaction->block_number) {
+            try {
+                $this->log('We request information about block number of outgoing TRC-20 transaction '.$transfer->txid.' ...');
+                $blockNumber = $this->api->getTransferBlockNumber($transfer->txid);
+                $this->node->increment('requests', 1);
+
+                if ($blockNumber) {
+                    $transaction->update(['block_number' => $blockNumber]);
+                }
+            } catch (\Exception $e) {
+                $this->log('Error resolving TRC-20 block number for '.$transfer->txid.': '.$e->getMessage());
+            }
+        }
+
         if ($type === TronTransactionType::INCOMING) {
             $trc20 = TronTRC20::whereAddress($transfer->contractAddress)->first();
             if ($trc20) {
