@@ -28,6 +28,8 @@ return new class extends Migration {
                 ->nullable();
             $table->decimal('balance', 20, 6)
                 ->nullable();
+            $table->unsignedBigInteger('balance_block')
+                ->nullable();
             $table->json('trc20')
                 ->default('[]');
             $table->json('account')

@@ -3,7 +3,10 @@
 namespace ItHealer\LaravelTron\Services;
 
 use Brick\Math\BigDecimal;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use ItHealer\LaravelTron\Enums\TronTransactionType;
+use ItHealer\LaravelTron\Models\TronAddress;
 use ItHealer\LaravelTron\Models\TronTransaction;
 
 /**
@@ -34,14 +37,39 @@ class PendingBalance
 
         /** @var class-string<TronTransaction> $model */
         $model = config('tron.models.transaction');
+        /** @var class-string<TronAddress> $addressModel */
+        $addressModel = config('tron.models.address');
+
+        $txTable = (new $model)->getTable();
+        $addrTable = (new $addressModel)->getTable();
 
         $placeholders = implode(',', array_fill(0, count($addresses), '?'));
 
+        /*
+         * An outgoing transfer stays "in flight" (subtracted from the available balance) until
+         * it is reflected in the confirmed balance: either still unconfirmed (no block_number)
+         * or confirmed at a block the solidity balance has not caught up to yet
+         * (block_number > balance_block). The join supplies each address's balance_block — the
+         * solidity block its stored balance corresponds to. This prevents the available balance
+         * from briefly reverting to its pre-send value during the solidity finality lag.
+         */
         $rows = $model::query()
-            ->pendingOutgoing()
-            ->whereRaw("LOWER(address) IN ($placeholders)", $addresses)
-            ->selectRaw('LOWER(address) as address_key, trc20_contract_address, SUM(amount) as amount_sum, SUM(fee) as fee_sum')
-            ->groupBy('address_key', 'trc20_contract_address')
+            ->join(
+                $addrTable,
+                DB::raw("LOWER($addrTable.address)"),
+                '=',
+                DB::raw("LOWER($txTable.address)")
+            )
+            ->where("$txTable.type", TronTransactionType::OUTGOING)
+            ->whereNull("$txTable.dropped_at")
+            ->whereRaw("LOWER($txTable.address) IN ($placeholders)", $addresses)
+            ->where(function ($query) use ($txTable, $addrTable) {
+                $query
+                    ->whereNull("$txTable.block_number")
+                    ->orWhereColumn("$txTable.block_number", '>', "$addrTable.balance_block");
+            })
+            ->selectRaw("LOWER($txTable.address) as address_key, $txTable.trc20_contract_address as trc20_contract_address, SUM($txTable.amount) as amount_sum, SUM($txTable.fee) as fee_sum")
+            ->groupBy('address_key', "$txTable.trc20_contract_address")
             ->toBase()
             ->get();
 

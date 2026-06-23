@@ -137,16 +137,65 @@ class AddressSync extends BaseSync
             'success'
         );
 
-        $this->address->update([
+        $attributes = [
             'activated' => $getAccount->activated,
             'balance' => $getAccount->balance,
             'account' => $getAccount->toArray(),
             'account_resources' => $getAccountResources->toArray(),
             'touch_at' => $this->address->touch_at ?: Date::now(),
-        ]);
-        $this->node->increment('requests', 2);
+        ];
+        $requests = 2;
+
+        /*
+         * The balance comes from the solidity (irreversible) node, which lags the chain head
+         * by ~19-20 blocks. An outgoing transfer gets its block_number from the head almost
+         * immediately, so it would leave the pending set ~60s before the solidity balance
+         * reflects the spend — briefly reverting the available balance to its pre-send value.
+         * To avoid that, record the solidity block the balance corresponds to; PendingBalance
+         * keeps subtracting an outgoing transfer until its block has become irreversible
+         * (block_number <= balance_block). Only fetched while a transfer is still in flight,
+         * so it costs nothing in the common idle case.
+         */
+        if ($this->hasInFlightOutgoing()) {
+            $this->log('Method walletsolidity/getnowblock started...');
+            $solidityBlock = $this->api->getSolidityBlockNumber();
+            $this->log('Method walletsolidity/getnowblock finished: '.$solidityBlock, 'success');
+
+            if ($solidityBlock !== null) {
+                $attributes['balance_block'] = $solidityBlock;
+            }
+            $requests++;
+        }
+
+        $this->address->update($attributes);
+        $this->node->increment('requests', $requests);
 
         return $this;
+    }
+
+    /**
+     * Whether the address has an outgoing transfer that is not yet reflected in the confirmed
+     * balance: still unconfirmed (no block_number) or confirmed at a block the solidity balance
+     * has not caught up to yet. Only then do we need a fresh solidity block reference.
+     */
+    protected function hasInFlightOutgoing(): bool
+    {
+        $balanceBlock = $this->address->balance_block;
+
+        return TronTransaction::query()
+            ->where('type', TronTransactionType::OUTGOING)
+            ->whereNull('dropped_at')
+            ->where('address', $this->address->address)
+            ->where(function ($query) use ($balanceBlock) {
+                $query->whereNull('block_number');
+
+                if ($balanceBlock !== null) {
+                    $query->orWhere('block_number', '>', $balanceBlock);
+                } else {
+                    $query->orWhereNotNull('block_number');
+                }
+            })
+            ->exists();
     }
 
     protected function trc20Balances(): self

@@ -82,6 +82,21 @@ class Api
         return AccountResourcesDTO::fromArray($address, $data);
     }
 
+    /**
+     * Latest solidity (irreversible) block number. The account balance is read from the
+     * solidity node, so this is the block that `getAccount()` balance corresponds to. Used
+     * to keep an outgoing transfer subtracted from the available balance until the confirmed
+     * balance actually reflects the spend (the transfer's block has become irreversible).
+     */
+    public function getSolidityBlockNumber(): ?int
+    {
+        $data = $this->manager->request('walletsolidity/getnowblock');
+
+        $blockNumber = $data['block_header']['raw_data']['number'] ?? null;
+
+        return $blockNumber !== null ? (int) $blockNumber : null;
+    }
+
     public function validateAddress(string $address, string &$error = null): bool
     {
         $data = $this->manager->request('wallet/validateaddress', null, [
