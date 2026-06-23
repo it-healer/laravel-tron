@@ -177,9 +177,12 @@ class TRC20Transfer
             throw new \Exception($response['Error'] ?? print_r($data, true));
         }
 
+        $expiration = $transaction['raw_data']['expiration'] ?? null;
+
         return new TRC20TransferSendDTO(
             txid: $data['txid'],
             preview: $preview,
+            expiration: $expiration !== null ? (int) $expiration : null,
         );
     }
 }

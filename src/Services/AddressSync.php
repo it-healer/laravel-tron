@@ -58,7 +58,8 @@ class AddressSync extends BaseSync
             && !$this->force
             && $this->shouldSkipBySchedule()
         ) {
-            $this->log('No synchronization required by the adaptive touch schedule.', 'success');
+            $this->log('No full synchronization by the adaptive touch schedule; reconciling pending only.', 'success');
+            $this->reconcilePending();
             return;
         }
 
@@ -71,25 +72,65 @@ class AddressSync extends BaseSync
     }
 
     /**
-     * Drop broadcast-but-still-pending outgoing transfers that never confirmed within the
-     * TTL, so a stuck/dropped transaction stops being subtracted from the available balance
-     * forever. Confirmed transfers leave the pending set automatically once the explorer
-     * returns them with a block_number. Tron has no account nonce, so TTL is the safety net.
+     * Resolve broadcast-but-still-pending outgoing transfers so a stuck/dropped transaction
+     * stops being subtracted from the available balance forever. Tron has no account nonce,
+     * so each pending transfer is reconciled directly:
+     *
+     *  1. Authoritative: ask the node for its block number (gettransactioninfobyid). Once it
+     *     is mined the transfer leaves the pending set immediately.
+     *  2. Deterministic drop: a Tron transaction carries a signed `expiration`; once the chain
+     *     passes it the transaction can never be included. If it is still not mined a grace
+     *     period past `expired_at` (to absorb head→info lag) it is marked dropped.
+     *  3. Fallback: a blind TTL for transfers stored before `expired_at` was tracked.
      */
     protected function reconcilePending(): self
     {
-        $ttlMinutes = config('tron.pending.ttl_minutes');
-        if ($ttlMinutes === null) {
+        $pending = TronTransaction::query()
+            ->pendingOutgoing()
+            ->where('address', $this->address->address)
+            ->get();
+
+        if ($pending->isEmpty()) {
             return $this;
         }
 
-        $threshold = Date::now()->copy()->subMinutes((int) $ttlMinutes);
+        $now = Date::now();
 
-        TronTransaction::query()
-            ->pendingOutgoing()
-            ->where('address', $this->address->address)
-            ->where('time_at', '<', $threshold)
-            ->update(['dropped_at' => Date::now()]);
+        $graceSeconds = (int) config('tron.pending.expiration_grace_seconds', 60);
+
+        $ttlMinutes = config('tron.pending.ttl_minutes');
+        $ttlThreshold = $ttlMinutes !== null
+            ? $now->copy()->subMinutes((int) $ttlMinutes)
+            : null;
+
+        foreach ($pending as $transaction) {
+            try {
+                $this->log('Reconcile: requesting block number of pending outgoing '.$transaction->txid.' ...');
+                $blockNumber = $this->api->getTransferBlockNumber($transaction->txid);
+                $this->node->increment('requests', 1);
+
+                if ($blockNumber) {
+                    $transaction->update(['block_number' => $blockNumber]);
+                    continue;
+                }
+            } catch (\Exception $e) {
+                $this->log('Reconcile: error resolving block number for '.$transaction->txid.': '.$e->getMessage());
+            }
+
+            if ($transaction->expired_at !== null) {
+                if ($transaction->expired_at->copy()->addSeconds($graceSeconds) < $now) {
+                    $this->log('Reconcile: pending outgoing '.$transaction->txid.' expired without confirmation, dropping.', 'success');
+                    $transaction->update(['dropped_at' => $now]);
+                }
+
+                continue;
+            }
+
+            if ($ttlThreshold !== null && $transaction->time_at && $transaction->time_at < $ttlThreshold) {
+                $this->log('Reconcile: pending outgoing '.$transaction->txid.' exceeded TTL, dropping.', 'success');
+                $transaction->update(['dropped_at' => $now]);
+            }
+        }
 
         return $this;
     }

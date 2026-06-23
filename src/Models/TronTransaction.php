@@ -25,6 +25,7 @@ class TronTransaction extends Model
         'fee',
         'trc20_contract_address',
         'block_number',
+        'expired_at',
         'dropped_at',
         'debug_data',
     ];
@@ -39,6 +40,7 @@ class TronTransaction extends Model
         'amount' => BigDecimalCast::class,
         'fee' => BigDecimalCast::class,
         'block_number' => 'integer',
+        'expired_at' => 'datetime',
         'dropped_at' => 'datetime',
         'debug_data' => 'json',
     ];
@@ -46,7 +48,8 @@ class TronTransaction extends Model
     /**
      * Outgoing transfers broadcast but not yet confirmed (no block_number) and not
      * reconciled as dropped — their amount and fee are still in flight. Tron has no
-     * account nonce, so stale pending transfers are reconciled by TTL during sync.
+     * account nonce; during sync each pending transfer is resolved by txid (mined) or
+     * dropped once it passes its `expired_at` (with TTL as a last-resort fallback).
      */
     public function scopePendingOutgoing(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
     {

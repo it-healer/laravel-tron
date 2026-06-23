@@ -134,9 +134,12 @@ class Transfer
             throw new \Exception($response['Error'] ?? print_r($data, true));
         }
 
+        $expiration = $transaction['raw_data']['expiration'] ?? null;
+
         return new TransferSendDTO(
             txid: $data['txid'],
             preview: $preview,
+            expiration: $expiration !== null ? (int) $expiration : null,
         );
     }
 }

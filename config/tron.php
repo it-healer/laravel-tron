@@ -39,15 +39,20 @@ return [
 
     /*
      * Broadcast-but-unconfirmed outgoing transfers are subtracted from the confirmed
-     * balance to show a truthful "available" balance. They leave the pending set once
-     * the explorer returns them confirmed. Tron has no account nonce, so `ttl_minutes`
-     * is the safety net: a pending transfer older than this stops being subtracted
+     * balance to show a truthful "available" balance. During sync each pending transfer
+     * is resolved authoritatively by txid (mined => block_number). A Tron transaction
+     * that passed its `expiration` without being included can never be mined, so it is
+     * dropped `expiration_grace_seconds` after expiry (the grace absorbs the lag between
+     * the head confirming a block and gettransactioninfobyid reflecting it). `ttl_minutes`
+     * is a last-resort fallback for transfers stored before expiration was tracked
      * (null disables the TTL).
      */
     'pending' => [
         'ttl_minutes' => env('TRON_PENDING_TTL_MINUTES') !== null
             ? (int) env('TRON_PENDING_TTL_MINUTES')
             : 120,
+
+        'expiration_grace_seconds' => (int) env('TRON_PENDING_EXPIRATION_GRACE_SECONDS', 60),
     ],
 
     /*
