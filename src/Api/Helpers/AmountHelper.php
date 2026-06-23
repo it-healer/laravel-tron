@@ -14,7 +14,7 @@ class AmountHelper
         return $decimals ? $value->dividedBy(
             BigDecimal::of(10)->power($decimals),
             $decimals,
-            RoundingMode::DOWN
+            RoundingMode::Down
         ) : $value;
     }
 
@@ -29,7 +29,7 @@ class AmountHelper
 
         return $value->multipliedBy(
             BigDecimal::of(10)->power($decimals)
-        )->toScale(0, RoundingMode::HALF_UP)->toInt();
+        )->toScale(0, RoundingMode::HalfUp)->toInt();
     }
 
     public static function decimalToSun(string|int|float|BigDecimal $value): int
