@@ -27,6 +27,7 @@ class TronTransaction extends Model
         'block_number',
         'expired_at',
         'dropped_at',
+        'failed',
         'debug_data',
     ];
 
@@ -42,6 +43,7 @@ class TronTransaction extends Model
         'block_number' => 'integer',
         'expired_at' => 'datetime',
         'dropped_at' => 'datetime',
+        'failed' => 'boolean',
         'debug_data' => 'json',
     ];
 

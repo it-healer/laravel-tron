@@ -105,16 +105,19 @@ class AddressSync extends BaseSync
 
         foreach ($pending as $transaction) {
             try {
-                $this->log('Reconcile: requesting block number of pending outgoing '.$transaction->txid.' ...');
-                $blockNumber = $this->api->getTransferBlockNumber($transaction->txid);
+                $this->log('Reconcile: requesting status of pending outgoing '.$transaction->txid.' ...');
+                $status = $this->api->getTransferStatus($transaction->txid);
                 $this->node->increment('requests', 1);
 
-                if ($blockNumber) {
-                    $transaction->update(['block_number' => $blockNumber]);
+                if ($status['blockNumber']) {
+                    $transaction->update([
+                        'block_number' => $status['blockNumber'],
+                        'failed' => $status['failed'],
+                    ]);
                     continue;
                 }
             } catch (\Exception $e) {
-                $this->log('Reconcile: error resolving block number for '.$transaction->txid.': '.$e->getMessage());
+                $this->log('Reconcile: error resolving status for '.$transaction->txid.': '.$e->getMessage());
             }
 
             if ($transaction->expired_at !== null) {
@@ -314,6 +317,7 @@ class AddressSync extends BaseSync
             'to' => $transfer->to,
             'amount' => $transfer->value,
             'block_number' => $transfer->blockNumber,
+            'failed' => ! $transfer->success,
             'debug_data' => $transfer->toArray(),
         ]);
 
@@ -370,15 +374,18 @@ class AddressSync extends BaseSync
          */
         if ($type === TronTransactionType::OUTGOING && ! $transaction->block_number) {
             try {
-                $this->log('We request information about block number of outgoing TRC-20 transaction '.$transfer->txid.' ...');
-                $blockNumber = $this->api->getTransferBlockNumber($transfer->txid);
+                $this->log('We request information about status of outgoing TRC-20 transaction '.$transfer->txid.' ...');
+                $status = $this->api->getTransferStatus($transfer->txid);
                 $this->node->increment('requests', 1);
 
-                if ($blockNumber) {
-                    $transaction->update(['block_number' => $blockNumber]);
+                if ($status['blockNumber']) {
+                    $transaction->update([
+                        'block_number' => $status['blockNumber'],
+                        'failed' => $status['failed'],
+                    ]);
                 }
             } catch (\Exception $e) {
-                $this->log('Error resolving TRC-20 block number for '.$transfer->txid.': '.$e->getMessage());
+                $this->log('Error resolving TRC-20 status for '.$transfer->txid.': '.$e->getMessage());
             }
         }
 

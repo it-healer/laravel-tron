@@ -164,6 +164,30 @@ class Api
         return $data['blockNumber'] ?? null;
     }
 
+    /**
+     * Block number and execution outcome of a transaction in a single
+     * gettransactioninfobyid call. `failed` is true only for a transaction that was
+     * included in a block but reverted / ran out of energy (top-level result "FAILED"
+     * or a receipt result other than "SUCCESS"); a plain successful TRX transfer carries
+     * no result and is therefore not failed. `blockNumber` is null while not yet mined.
+     *
+     * @return array{blockNumber: ?int, failed: bool}
+     */
+    public function getTransferStatus(string $txid): array
+    {
+        $data = $this->manager->request('wallet/gettransactioninfobyid', [
+            'value' => $txid,
+        ]);
+
+        $blockNumber = $data['blockNumber'] ?? null;
+        $result = $data['result'] ?? ($data['receipt']['result'] ?? null);
+
+        return [
+            'blockNumber' => $blockNumber !== null ? (int) $blockNumber : null,
+            'failed' => $blockNumber !== null && $result !== null && $result !== 'SUCCESS',
+        ];
+    }
+
     public function transfer(string $from, string $to, string|int|float|BigDecimal $amount): Transfer
     {
         $from = AddressHelper::toBase58($from);
