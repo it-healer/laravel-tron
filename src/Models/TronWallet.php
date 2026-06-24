@@ -101,7 +101,7 @@ class TronWallet extends Model
     {
         return new Attribute(
             get: function (): string {
-                $pending = \ItHealer\LaravelTron\Services\PendingBalance::forAddresses($this->addresses()->pluck('address')->all());
+                $pending = \ItHealer\LaravelTron\Services\PendingBalance::forAddresses($this->addresses()->where('available', true)->pluck('address')->all());
 
                 $native = \Brick\Math\BigDecimal::zero();
                 $fee = \Brick\Math\BigDecimal::zero();
@@ -124,7 +124,7 @@ class TronWallet extends Model
     {
         return new Attribute(
             get: function () {
-                $pending = \ItHealer\LaravelTron\Services\PendingBalance::forAddresses($this->addresses()->pluck('address')->all());
+                $pending = \ItHealer\LaravelTron\Services\PendingBalance::forAddresses($this->addresses()->where('available', true)->pluck('address')->all());
 
                 $tokenPending = [];
                 foreach ($pending as $row) {
