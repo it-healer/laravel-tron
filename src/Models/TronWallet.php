@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use ItHealer\LaravelTron\Casts\BigDecimalCast;
 use ItHealer\LaravelTron\Casts\EncryptedCast;
+use ItHealer\LaravelTron\Enums\TronTransactionType;
 
 class TronWallet extends Model
 {
@@ -73,6 +74,15 @@ class TronWallet extends Model
         /** @var class-string<TronAddress> $addressModel */
         $addressModel = config('tron.models.address');
 
+        $transactionsTable = (new $transactionModel)->getTable();
+        $addressesTable = (new $addressModel)->getTable();
+        $walletId = $this->id;
+
+        // Кошелёк может владеть несколькими адресами (сгенерированными или watch-only
+        // импортированными). Если оба конца перевода — исходящий и входящий — попадают на
+        // адреса ОДНОГО и того же кошелька, входящая строка скрывается из его ленты: иначе
+        // перевод на "чужой" (но тоже отслеживаемый этим кошельком) адрес выглядит так, будто
+        // деньги тут же вернулись обратно. Расходная строка остаётся видимой всегда.
         return $this->hasManyThrough(
             $transactionModel,
             $addressModel,
@@ -80,7 +90,17 @@ class TronWallet extends Model
             'address',
             'id',
             'address'
-        );
+        )->where(function ($query) use ($transactionsTable, $addressesTable, $walletId) {
+            $query->where("$transactionsTable.type", '!=', TronTransactionType::INCOMING->value)
+                ->orWhereNotExists(function ($sub) use ($transactionsTable, $addressesTable, $walletId) {
+                    $sub->selectRaw(1)
+                        ->from("$transactionsTable as self_out")
+                        ->join("$addressesTable as self_addr", 'self_addr.address', '=', 'self_out.address')
+                        ->whereColumn('self_out.txid', "$transactionsTable.txid")
+                        ->where('self_out.type', TronTransactionType::OUTGOING->value)
+                        ->where('self_addr.wallet_id', $walletId);
+                });
+        });
     }
 
     protected function trc20Balances(): Attribute
