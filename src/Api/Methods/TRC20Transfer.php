@@ -97,7 +97,7 @@ class TRC20Transfer
             if ($energyRequired > $energyBefore) {
                 $energyAfter = $energyBefore;
                 $energyInsufficient = $energyRequired - $energyBefore;
-                $energyPrice = $this->api->chainParameter('getEnergyFee', 420);
+                $energyPrice = $this->api->chainParameter('getEnergyFee', 100);
                 $energyFee = AmountHelper::sunToDecimal($energyPrice)->multipliedBy($energyInsufficient);
                 $balanceAfter = $balanceAfter->minus($energyFee);
             } else {
@@ -117,7 +117,7 @@ class TRC20Transfer
             if ($bandwidthRequired > $bandwidthBefore) {
                 $bandwidthInsufficient = $bandwidthRequired;
                 $bandwidthAfter = $bandwidthBefore;
-                $bandwidthFee = AmountHelper::sunToDecimal(($bandwidthRequired + 1) * 1000);
+                $bandwidthFee = AmountHelper::sunToDecimal(($bandwidthRequired + 1) * $this->api->chainParameter('getTransactionFee', 1000));
                 $balanceAfter = $balanceAfter->minus($bandwidthFee);
             } else {
                 $bandwidthAfter = $bandwidthBefore - $bandwidthRequired;

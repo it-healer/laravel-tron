@@ -56,6 +56,12 @@ return [
     ],
 
     /*
+     * How long chain parameters read from the node (getEnergyFee, getTransactionFee, ...)
+     * are cached, in seconds. 0 disables caching and reads them on every call.
+     */
+    'chain_parameters_ttl' => (int) env('TRON_CHAIN_PARAMETERS_TTL', 3600),
+
+    /*
      * Wallet settings.
      */
     'wallet' => [

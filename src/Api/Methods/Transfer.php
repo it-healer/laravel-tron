@@ -59,7 +59,7 @@ class Transfer
             $balanceAfter = $balanceBefore->minus($this->amount);
 
             if (!$to->activated) {
-                $activateFee = AmountHelper::sunToDecimal(100000);
+                $activateFee = AmountHelper::sunToDecimal($this->api->chainParameter('getCreateAccountFee', 100000));
                 $balanceAfter = $balanceAfter->minus($activateFee);
             }
 
@@ -79,7 +79,7 @@ class Transfer
                     $bandwidthBefore = $fromResources->bandwidthAvailable;
                 }
                 if( $bandwidthRequired > $bandwidthBefore ) {
-                    $bandwidthFee = AmountHelper::sunToDecimal(($bandwidthRequired + 1) * 1000);
+                    $bandwidthFee = AmountHelper::sunToDecimal(($bandwidthRequired + 1) * $this->api->chainParameter('getTransactionFee', 1000));
                     $balanceAfter = $balanceAfter->minus($bandwidthFee);
                     $bandwidthAfter = 0;
                 }

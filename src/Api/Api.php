@@ -3,6 +3,8 @@
 namespace ItHealer\LaravelTron\Api;
 
 use Brick\Math\BigDecimal;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use kornrunner\Secp256k1;
 use kornrunner\Signature\Signature;
 use ItHealer\LaravelTron\Api\DTO\AccountResourcesDTO;
@@ -18,7 +20,9 @@ use ItHealer\LaravelTron\Api\Methods\TRC20Transfers;
 class Api
 {
     public readonly ApiManager $manager;
-    protected readonly array $chainParameters;
+
+    /** @var ?array<string, mixed> */
+    protected ?array $chainParameters = null;
 
     public function __construct(
         ?HttpProvider $fullNode = null,
@@ -39,20 +43,81 @@ class Api
             )
         );
 
-        $chainParametersFromFile = file_get_contents(__DIR__.'/Resources/chain_parameters.json');
-        $chainParametersFromFile = json_decode($chainParametersFromFile, true);
-        $chainParameters = [];
-        foreach ($chainParametersFromFile['chainParameter'] ?? [] as $item) {
-            if (isset($item['key'], $item['value'])) {
-                $chainParameters[$item['key']] = $item['value'];
-            }
-        }
-        $this->chainParameters = $chainParameters;
     }
 
     public function chainParameter(string $name, mixed $default = null): mixed
     {
-        return $this->chainParameters[$name] ?? $default;
+        return $this->chainParameters()[$name] ?? $default;
+    }
+
+    /**
+     * Chain parameters are voted on by super representatives and change over time
+     * (`getEnergyFee` alone went 10 -> 140 -> 420 -> 100 sun), so they are read from the
+     * node and cached. The bundled snapshot is only a fallback for when the node is
+     * unreachable.
+     *
+     * @return array<string, mixed>
+     */
+    public function chainParameters(): array
+    {
+        if ($this->chainParameters !== null) {
+            return $this->chainParameters;
+        }
+
+        $ttl = (int) config('tron.chain_parameters_ttl', 3600);
+
+        $parameters = $ttl > 0
+            ? Cache::remember(
+                'tron:chain-parameters:'.sha1($this->manager->fullNode()->baseUri),
+                $ttl,
+                fn () => $this->fetchChainParameters()
+            )
+            : $this->fetchChainParameters();
+
+        return $this->chainParameters = $parameters ?: $this->chainParametersFromFile();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function fetchChainParameters(): array
+    {
+        try {
+            $response = $this->manager->request('wallet/getchainparameters');
+        } catch (\Throwable $e) {
+            Log::warning('Tron: unable to read chain parameters from the node, falling back to the bundled snapshot: '.$e->getMessage());
+
+            return [];
+        }
+
+        return $this->normalizeChainParameters($response);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function chainParametersFromFile(): array
+    {
+        $contents = file_get_contents(__DIR__.'/Resources/chain_parameters.json');
+
+        return $this->normalizeChainParameters(json_decode($contents, true) ?: []);
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @return array<string, mixed>
+     */
+    protected function normalizeChainParameters(array $response): array
+    {
+        $parameters = [];
+
+        foreach ($response['chainParameter'] ?? [] as $item) {
+            if (isset($item['key'], $item['value'])) {
+                $parameters[$item['key']] = $item['value'];
+            }
+        }
+
+        return $parameters;
     }
 
     public function isConnected(): array
