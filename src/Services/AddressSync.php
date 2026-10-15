@@ -82,19 +82,34 @@ class AddressSync extends BaseSync
      *     passes it the transaction can never be included. If it is still not mined a grace
      *     period past `expired_at` (to absorb head→info lag) it is marked dropped.
      *  3. Fallback: a blind TTL for transfers stored before `expired_at` was tracked.
+     *
+     * A transfer is dropped only after the node answered that it does not know it: a failed
+     * lookup (rate limit, node error) says nothing about the transaction and is retried on
+     * the next sync. Transfers dropped within `recheck_dropped_hours` are looked up again and
+     * restored if they turn out to be mined after all.
      */
     protected function reconcilePending(): self
     {
+        $now = Date::now();
+
+        $recheckHours = config('tron.pending.recheck_dropped_hours', 24);
+
         $pending = TronTransaction::query()
-            ->pendingOutgoing()
+            ->where('type', TronTransactionType::OUTGOING)
             ->where('address', $this->address->address)
+            ->whereNull('block_number')
+            ->where(function ($query) use ($now, $recheckHours) {
+                $query->whereNull('dropped_at');
+
+                if ($recheckHours !== null) {
+                    $query->orWhere('dropped_at', '>=', $now->copy()->subHours((int) $recheckHours));
+                }
+            })
             ->get();
 
         if ($pending->isEmpty()) {
             return $this;
         }
-
-        $now = Date::now();
 
         $graceSeconds = (int) config('tron.pending.expiration_grace_seconds', 60);
 
@@ -108,16 +123,24 @@ class AddressSync extends BaseSync
                 $this->log('Reconcile: requesting status of pending outgoing '.$transaction->txid.' ...');
                 $status = $this->api->getTransferStatus($transaction->txid);
                 $this->node->increment('requests', 1);
-
-                if ($status['blockNumber']) {
-                    $transaction->update([
-                        'block_number' => $status['blockNumber'],
-                        'failed' => $status['failed'],
-                    ]);
-                    continue;
-                }
             } catch (\Exception $e) {
-                $this->log('Reconcile: error resolving status for '.$transaction->txid.': '.$e->getMessage());
+                $this->log('Reconcile: error resolving status for '.$transaction->txid.', will retry: '.$e->getMessage());
+
+                continue;
+            }
+
+            if ($status['blockNumber']) {
+                $transaction->update([
+                    'block_number' => $status['blockNumber'],
+                    'failed' => $status['failed'],
+                    'dropped_at' => null,
+                ]);
+
+                continue;
+            }
+
+            if ($transaction->dropped_at !== null) {
+                continue;
             }
 
             if ($transaction->expired_at !== null) {
@@ -319,6 +342,7 @@ class AddressSync extends BaseSync
             'block_number' => $transfer->blockNumber,
             'failed' => ! $transfer->success,
             'debug_data' => $transfer->toArray(),
+            ...($transfer->blockNumber ? ['dropped_at' => null] : []),
         ]);
 
         if ($type === TronTransactionType::INCOMING) {
@@ -382,6 +406,7 @@ class AddressSync extends BaseSync
                     $transaction->update([
                         'block_number' => $status['blockNumber'],
                         'failed' => $status['failed'],
+                        'dropped_at' => null,
                     ]);
                 }
             } catch (\Exception $e) {

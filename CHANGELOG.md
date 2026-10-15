@@ -2,6 +2,24 @@
 
 All notable changes to `laravel-tron` will be documented in this file.
 
+## v1.6.6 - 2026-10-15
+
+### Fixed
+
+- Confirmed outgoing transfers were marked as dropped when the status lookup failed: a rate limit
+  or server error from the node (429/5xx, usually with a non-JSON body) decoded to an empty answer,
+  read as "transaction unknown", and the TTL fallback dropped the transfer. `HttpProvider` now
+  throws on 429/5xx, and sync never drops a transfer whose lookup failed.
+- A dropped transfer that shows up mined (sync history or status lookup) gets its block number and
+  loses the drop mark.
+
+### Added
+
+- `tron.pending.recheck_dropped_hours` (default 24): transfers dropped within this window are
+  looked up again on every sync.
+- `tron:recheck-dropped {--address=} {--sleep=300} {--dry-run}` — looks up every dropped outgoing
+  transfer and restores the mined ones (repairs data dropped by earlier versions).
+
 ## v1.2.0 - 2026-06-15
 
 ### Added

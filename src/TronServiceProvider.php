@@ -9,6 +9,7 @@ use ItHealer\LaravelTron\Commands\ImportAddressCommand;
 use ItHealer\LaravelTron\Commands\AddressSyncCommand;
 use ItHealer\LaravelTron\Commands\NewNodeCommand;
 use ItHealer\LaravelTron\Commands\NodeSyncCommand;
+use ItHealer\LaravelTron\Commands\RecheckDroppedCommand;
 use ItHealer\LaravelTron\Commands\SyncCommand;
 use ItHealer\LaravelTron\Commands\WalletSyncCommand;
 use Spatie\LaravelPackageTools\Commands\InstallCommand;
@@ -42,6 +43,7 @@ class TronServiceProvider extends PackageServiceProvider
                 AddressSyncCommand::class,
                 WalletSyncCommand::class,
                 NodeSyncCommand::class,
+                RecheckDroppedCommand::class,
             )
             ->hasInstallCommand(function(InstallCommand $command) {
                 $command

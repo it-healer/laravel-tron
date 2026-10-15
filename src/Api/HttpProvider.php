@@ -81,6 +81,15 @@ class HttpProvider
             throw new \Exception('Page not found');
         }
 
+        /*
+         * Rate limits and server errors often come with a non-JSON body, which would
+         * otherwise decode to an empty array and read as "nothing found" (e.g. an unknown
+         * transaction) instead of a failed request.
+         */
+        if ($status == 429 || $status >= 500) {
+            throw new \Exception('HTTP '.$status.' from Tron node');
+        }
+
         if (isset($decodedBody['Error'])) {
             throw new \Exception($decodedBody['Error']);
         }

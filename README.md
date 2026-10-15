@@ -492,6 +492,21 @@ $wallet->addresses()->update(['touch_at' => now()]);
 Defaults (`fast_interval` 0, `slow_interval` null) preserve the legacy behavior: active
 addresses sync every run, idle ones are skipped. `tron:address-sync --force` bypasses the schedule.
 
+### Pending Outgoing Transfers
+
+A broadcast transfer stays pending until the node reports its block. It is marked dropped
+(`dropped_at`) only after the node answers that it does not know the transaction and it has
+passed its signed expiration (or `tron.pending.ttl_minutes` for transfers without one); a failed
+lookup is simply retried on the next sync. Transfers dropped within
+`tron.pending.recheck_dropped_hours` are looked up again and restored if they were mined.
+
+To re-check every dropped transfer (for example after a node outage):
+
+```bash
+php artisan tron:recheck-dropped --dry-run   # report only
+php artisan tron:recheck-dropped --sleep=300 # restore mined ones, 300 ms between requests
+```
+
 ### Multiple Derivation Paths
 
 The package uses BIP44 standard with the path `m/44'/195'/0'/0` for Tron:

@@ -53,6 +53,14 @@ return [
             : 120,
 
         'expiration_grace_seconds' => (int) env('TRON_PENDING_EXPIRATION_GRACE_SECONDS', 60),
+
+        /*
+         * Transfers dropped within this many hours are looked up again on every sync and
+         * restored if they were mined after all (null disables the re-check).
+         */
+        'recheck_dropped_hours' => env('TRON_PENDING_RECHECK_DROPPED_HOURS') !== null
+            ? (int) env('TRON_PENDING_RECHECK_DROPPED_HOURS')
+            : 24,
     ],
 
     /*
