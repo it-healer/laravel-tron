@@ -14,6 +14,7 @@ use ItHealer\LaravelTron\Api\Helpers\AddressHelper;
 use ItHealer\LaravelTron\Api\DTO\AccountDTO;
 use ItHealer\LaravelTron\Api\Methods\Transfer;
 use ItHealer\LaravelTron\Api\Methods\Transfers;
+use ItHealer\LaravelTron\Api\Methods\ContractCall;
 use ItHealer\LaravelTron\Api\Methods\TRC20Transfer;
 use ItHealer\LaravelTron\Api\Methods\TRC20Transfers;
 
@@ -288,6 +289,53 @@ class Api
             amount: $amount,
             feeLimit: $feeLimit,
         );
+    }
+
+    /**
+     * Arbitrary smart contract call from a function selector and ABI-encoded parameters.
+     *
+     * @param  string  $parameter  ABI-encoded parameters (hex, without the 4-byte selector)
+     * @param  string|int|float|BigDecimal  $callValue  TRX sent with the call
+     * @param  string|int|float|BigDecimal  $feeLimit  max TRX to burn for energy
+     */
+    public function contractCall(
+        string $from,
+        string $contract,
+        string $functionSelector,
+        string $parameter,
+        string|int|float|BigDecimal $callValue = 0,
+        string|int|float|BigDecimal $feeLimit = 100,
+    ): ContractCall {
+        return new ContractCall(
+            api: $this,
+            from: AddressHelper::toBase58($from),
+            contract: AddressHelper::toBase58($contract),
+            functionSelector: $functionSelector,
+            parameter: $parameter,
+            callValue: BigDecimal::of($callValue),
+            feeLimit: BigDecimal::of($feeLimit),
+        );
+    }
+
+    /**
+     * Read-only contract call (e.g. allowance(address,address)); returns the raw result hex.
+     */
+    public function constantCall(string $contract, string $functionSelector, string $parameter = '', ?string $owner = null): string
+    {
+        $data = $this->manager->request('wallet/triggerconstantcontract', null, [
+            'owner_address' => $owner ? AddressHelper::toHex($owner) : '410000000000000000000000000000000000000000',
+            'contract_address' => AddressHelper::toHex($contract),
+            'function_selector' => $functionSelector,
+            'parameter' => preg_replace('/^0x/i', '', $parameter),
+        ]);
+
+        if (! ($data['result']['result'] ?? null) || ! isset($data['constant_result'][0])) {
+            $message = isset($data['result']['message']) ? @hex2bin($data['result']['message']) : null;
+
+            throw new \Exception($message ?: json_encode($data));
+        }
+
+        return $data['constant_result'][0];
     }
 
     public function signTransaction(array $transaction, string $privateKey): array

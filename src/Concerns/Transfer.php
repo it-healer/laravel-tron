@@ -3,6 +3,7 @@
 namespace ItHealer\LaravelTron\Concerns;
 
 use Brick\Math\BigDecimal;
+use ItHealer\LaravelTron\Api\DTO\ContractCallPreviewDTO;
 use ItHealer\LaravelTron\Api\DTO\TransferPreviewDTO;
 use ItHealer\LaravelTron\Api\DTO\TransferSendDTO;
 use ItHealer\LaravelTron\Api\DTO\TRC20TransferPreviewDTO;
@@ -125,6 +126,46 @@ trait Transfer
         return $node
             ->api()
             ->transferTRC20($trc20->address, $from->address, $to, $preview->tokenBefore, $feeLimit)
+            ->send($from->private_key);
+    }
+
+    /**
+     * Preview an arbitrary contract call from the address (energy, bandwidth, TRX burnt).
+     *
+     * @param  string  $parameter  ABI-encoded parameters, hex without the selector
+     */
+    public function previewContractCall(
+        TronAddress $from,
+        string $contract,
+        string $functionSelector,
+        string $parameter,
+        BigDecimal|float|int|string $callValue = 0,
+        BigDecimal|float|int|string $feeLimit = 100,
+    ): ContractCallPreviewDTO {
+        $node = $from->wallet->node ?? Tron::getNode();
+        $node->increment('requests', 4);
+
+        return $node->api()
+            ->contractCall($from->address, $contract, $functionSelector, $parameter, $callValue, $feeLimit)
+            ->preview();
+    }
+
+    /**
+     * Sign and broadcast an arbitrary contract call; returns the transaction id.
+     */
+    public function sendContractCall(
+        TronAddress $from,
+        string $contract,
+        string $functionSelector,
+        string $parameter,
+        BigDecimal|float|int|string $callValue = 0,
+        BigDecimal|float|int|string $feeLimit = 100,
+    ): string {
+        $node = $from->wallet->node ?? Tron::getNode();
+        $node->increment('requests', 5);
+
+        return $node->api()
+            ->contractCall($from->address, $contract, $functionSelector, $parameter, $callValue, $feeLimit)
             ->send($from->private_key);
     }
 }
