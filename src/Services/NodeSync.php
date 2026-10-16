@@ -53,7 +53,7 @@ class NodeSync extends BaseSync
             throw $e;
         }
 
-        $this->node->increment('requests');
+        // Сам запрос wallet/getblock уже учтён счётчиком узла (TronNode::recordRequest)
         $this->node->update([
             'block_number' => $blockNumber,
             'sync_at' => Date::now(),

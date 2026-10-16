@@ -15,7 +15,8 @@ class HttpProvider
         protected readonly ?string $password = null,
         public readonly int        $timeout = 30000,
         protected string           $statusPage = '/',
-        protected readonly ?string $proxy = null
+        protected readonly ?string $proxy = null,
+        protected readonly ?\Closure $onRequest = null,
     )
     {
     }
@@ -53,6 +54,11 @@ class HttpProvider
                 'proxy' => $this->formatProxy($this->proxy),
             ])
             ->withHeaders($this->headers);
+
+        // Счётчик запросов узла (лимиты провайдера считают каждый запрос, в том числе неудачный)
+        if ($this->onRequest) {
+            ($this->onRequest)();
+        }
 
         $response = $method === HttpMethod::POST ? $client->post($path, $payload) : $client->get($path);
         $statusCode = $response->status();

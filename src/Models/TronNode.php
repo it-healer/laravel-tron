@@ -4,6 +4,7 @@ namespace ItHealer\LaravelTron\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Date;
 use ItHealer\LaravelTron\Api\Api;
 use ItHealer\LaravelTron\Api\HttpProvider;
 
@@ -47,6 +48,24 @@ class TronNode extends Model
         return $this->hasMany($model, 'node_id');
     }
 
+    /**
+     * Учесть запрос к узлу: счётчик requests за текущие сутки (новые сутки — с нуля). Одним
+     * UPDATE, чтобы процессы с устаревшей копией модели не сбрасывали чужой счёт.
+     */
+    public function recordRequest(): void
+    {
+        if (! $this->exists) {
+            return;
+        }
+
+        $now = Date::now();
+
+        static::query()->whereKey($this->getKey())->toBase()->update([
+            'requests' => $this->getConnection()->raw('case when requests_at >= '.$this->getConnection()->getPdo()->quote($now->toDateString()).' then requests + 1 else 1 end'),
+            'requests_at' => $now->toDateString(),
+        ]);
+    }
+
     public function api(): Api
     {
         if( is_null( $this->_api ) ) {
@@ -56,6 +75,7 @@ class TronNode extends Model
                 user: $this->full_node['username'] ?? null,
                 password: $this->full_node['password'] ?? null,
                 proxy: $this->full_node['proxy'] ?? null,
+                onRequest: fn () => $this->recordRequest(),
             );
 
             $solidityNode = new HttpProvider(
@@ -64,6 +84,7 @@ class TronNode extends Model
                 user: $this->solidity_node['username'] ?? null,
                 password: $this->solidity_node['password'] ?? null,
                 proxy: $this->solidity_node['proxy'] ?? null,
+                onRequest: fn () => $this->recordRequest(),
             );
 
             // Optional separate provider for indexer (v1/accounts/...) endpoints, so a node
@@ -77,6 +98,7 @@ class TronNode extends Model
                     user: $this->index_node['username'] ?? null,
                     password: $this->index_node['password'] ?? null,
                     proxy: $this->index_node['proxy'] ?? null,
+                onRequest: fn () => $this->recordRequest(),
                 );
             }
 
