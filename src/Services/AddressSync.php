@@ -25,6 +25,8 @@ class AddressSync extends BaseSync
     protected readonly Api $api;
     protected readonly ?WebhookHandlerInterface $webhookHandler;
     protected readonly array $trc20Addresses;
+    /** @var array<string, int|null> stored decimals by contract, so a balance read is one request */
+    protected readonly array $trc20Decimals;
     /** @var TronDeposit[] $webhooks */
     protected array $webhooks = [];
     protected array $touchConfig = [];
@@ -37,6 +39,7 @@ class AddressSync extends BaseSync
         $this->node = $this->wallet->node ?? Tron::getNode();
         $this->api = $this->node->api();
         $this->trc20Addresses = TronTRC20::pluck('address')->all();
+        $this->trc20Decimals = TronTRC20::pluck('decimals', 'address')->all();
 
         $model = config('tron.webhook_handler');
         $this->webhookHandler = $model ? App::make($model) : null;
@@ -65,10 +68,123 @@ class AddressSync extends BaseSync
 
         $this
             ->accountWithResources()
-            ->trc20Balances()
+            ->trc20Balances();
+
+        $fingerprint = $this->fingerprint();
+
+        if ($fingerprint !== null && !$this->needsHistoryScan($fingerprint)) {
+            $this->log('Balances unchanged since the last history scan, skipping it.', 'success');
+            $this->address->update(['sync_at' => Date::now()]);
+            $this->reconcilePending();
+            return;
+        }
+
+        $this
             ->transactions()
+            ->rememberScan($fingerprint)
             ->reconcilePending()
             ->runWebhooks();
+    }
+
+    /**
+     * What the transfer history of the address depends on: the TRX balance, the activation
+     * flag and the TRC20 balances (all already read by this sync). Any transfer in or out and
+     * any fee changes one of them. Null when change detection is disabled.
+     */
+    protected function fingerprint(): ?string
+    {
+        if (!config('tron.sync.change_detection.enabled', true)) {
+            return null;
+        }
+
+        $trc20 = (array)$this->address->trc20;
+        ksort($trc20);
+
+        return hash('sha256', json_encode([
+            'activated' => (bool)$this->address->activated,
+            'balance' => (string)$this->address->balance,
+            'trc20' => $trc20,
+        ]));
+    }
+
+    /**
+     * The history is read when forced, when it was never read under change detection, when
+     * the fingerprint changed, within the settle window after a change (the balance and
+     * TronGrid's index lag the chain, so the read that noticed a change may not see the
+     * transfer yet), while a deposit the next read would cover still has fewer than
+     * `confirmations` (confirmations grow only when the history is read again) and at least
+     * every `max_skip_seconds` as a safety net.
+     */
+    protected function needsHistoryScan(string $fingerprint): bool
+    {
+        $state = (array)$this->address->scan_state;
+        $now = Date::now();
+
+        if ($this->force || !isset($state['fingerprint'], $state['scanned_at'])) {
+            return true;
+        }
+
+        if (!hash_equals((string)$state['fingerprint'], $fingerprint)) {
+            return true;
+        }
+
+        if (isset($state['settle_until']) && Date::parse($state['settle_until'])->isAfter($now)) {
+            return true;
+        }
+
+        if ($this->hasUnconfirmedDeposits(Date::parse($state['scanned_at']))) {
+            return true;
+        }
+
+        $maxSkip = (int)config('tron.sync.change_detection.max_skip_seconds', 21600);
+
+        return $maxSkip > 0 && Date::parse($state['scanned_at'])->lte($now->copy()->subSeconds($maxSkip));
+    }
+
+    /**
+     * A deposit below the confirmations target inside the window the next history read
+     * covers (from an hour before the last read): re-reading it is what raises its
+     * confirmations, so it must not be skipped. Older deposits are out of reach anyway.
+     */
+    protected function hasUnconfirmedDeposits(\DateTimeInterface $scannedAt): bool
+    {
+        $target = (int)config('tron.sync.change_detection.confirmations', 20);
+
+        return $target > 0 && $this->address
+            ->deposits()
+            ->where('confirmations', '<', $target)
+            ->where('time_at', '>=', Date::parse($scannedAt)->subSeconds(3600))
+            ->exists();
+    }
+
+    /**
+     * Stores the fingerprint the history was read for. A changed fingerprint opens the
+     * settle window; an unchanged one keeps the window that is already open.
+     */
+    protected function rememberScan(?string $fingerprint): self
+    {
+        if ($fingerprint === null) {
+            return $this;
+        }
+
+        $state = (array)$this->address->scan_state;
+        $now = Date::now();
+        $settleUntil = $state['settle_until'] ?? null;
+
+        if (($state['fingerprint'] ?? null) !== $fingerprint) {
+            $settleSeconds = (int)config('tron.sync.change_detection.settle_seconds', 600);
+            $settleUntil = $now->copy()->addSeconds($settleSeconds)->toIso8601String();
+        }
+
+        $this->address->update([
+            'scan_state' => [
+                'fingerprint' => $fingerprint,
+                'scanned_at' => $now->toIso8601String(),
+                'settle_until' => $settleUntil,
+            ],
+        ]);
+
+        return $this;
     }
 
     /**
@@ -122,7 +238,6 @@ class AddressSync extends BaseSync
             try {
                 $this->log('Reconcile: requesting status of pending outgoing '.$transaction->txid.' ...');
                 $status = $this->api->getTransferStatus($transaction->txid);
-                $this->node->increment('requests', 1);
             } catch (\Exception $e) {
                 $this->log('Reconcile: error resolving status for '.$transaction->txid.', will retry: '.$e->getMessage());
 
@@ -211,7 +326,6 @@ class AddressSync extends BaseSync
             'account_resources' => $getAccountResources->toArray(),
             'touch_at' => $this->address->touch_at ?: Date::now(),
         ];
-        $requests = 2;
 
         /*
          * The balance comes from the solidity (irreversible) node, which lags the chain head
@@ -231,11 +345,9 @@ class AddressSync extends BaseSync
             if ($solidityBlock !== null) {
                 $attributes['balance_block'] = $solidityBlock;
             }
-            $requests++;
         }
 
         $this->address->update($attributes);
-        $this->node->increment('requests', $requests);
 
         return $this;
     }
@@ -271,7 +383,7 @@ class AddressSync extends BaseSync
 
         foreach ($this->trc20Addresses as $trc20Address) {
             $this->log('Get TRC20 Balance from contract *'.$trc20Address.'* started...');
-            $balance = Tron::getTRC20Balance($this->address, $trc20Address);
+            $balance = Tron::getTRC20Balance($this->address, $trc20Address, decimals: $this->trc20Decimals[$trc20Address] ?? null);
             $this->log(
                 'Get TRC20 Balance from contract *'.$trc20Address.'* finished: '.$balance->__toString(),
                 'success'
@@ -284,14 +396,17 @@ class AddressSync extends BaseSync
             'trc20' => $balances,
         ]);
 
-        $this->node->increment('requests', count($balances));
-
         return $this;
     }
 
     protected function transactions(): self
     {
-        $minTimestamp = max(($this->address->sync_at?->getTimestamp() ?? 0) - 3600, 0) * 1000;
+        // With change detection sync_at is bumped on every check, so the history window starts
+        // from the last time the history itself was read (sync_at for addresses read before).
+        $scannedAt = isset($this->address->scan_state['scanned_at'])
+            ? Date::parse($this->address->scan_state['scanned_at'])
+            : $this->address->sync_at;
+        $minTimestamp = max(($scannedAt?->getTimestamp() ?? 0) - 3600, 0) * 1000;
 
         $this->log('Method v1/accounts/'.$this->address->address.'/transactions started...');
         $transfers = $this->api
@@ -312,7 +427,6 @@ class AddressSync extends BaseSync
             'sync_at' => Date::now(),
             'touch_at' => $this->address->touch_at ?: Date::now(),
         ]);
-        $this->node->increment('requests', 2);
 
         foreach ($transfers as $item) {
             $this->handleTransfer($item);
@@ -400,7 +514,6 @@ class AddressSync extends BaseSync
             try {
                 $this->log('We request information about status of outgoing TRC-20 transaction '.$transfer->txid.' ...');
                 $status = $this->api->getTransferStatus($transfer->txid);
-                $this->node->increment('requests', 1);
 
                 if ($status['blockNumber']) {
                     $transaction->update([
@@ -449,7 +562,6 @@ class AddressSync extends BaseSync
                         $transaction->update([
                             'block_number' => $blockNumber ?: null,
                         ]);
-                        $this->node->increment('requests', 1);
                     } catch (\Exception $e) {
                         $this->log('Error: '.$e->getMessage());
                     }

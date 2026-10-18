@@ -98,7 +98,6 @@ trait Address
         if( !$node ) {
             $node = Tron::getNode();
         }
-        $node->increment('requests', 1);
 
         return $node->api()->validateAddress($address);
     }

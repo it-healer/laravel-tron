@@ -16,7 +16,6 @@ trait TRC20
         if( !$node ) {
             $node = Tron::getNode();
         }
-        $node->increment('requests', 3);
 
         $contract = $node->api()->getTRC20Contract($contractAddress);
 
@@ -31,16 +30,24 @@ trait TRC20
         ]);
     }
 
-    public function getTRC20Balance(TronAddress|string $address, TronTRC20|string $trc20, ?TronNode $node = null): BigDecimal
+    /**
+     * TRC20 balance of an address. Known decimals (from the model or `$decimals`) save the
+     * decimals() call, so the read is a single triggerconstantcontract request.
+     */
+    public function getTRC20Balance(TronAddress|string $address, TronTRC20|string $trc20, ?TronNode $node = null, ?int $decimals = null): BigDecimal
     {
         if( !$node ) {
             $node = Tron::getNode();
         }
-        $node->increment('requests', 1);
 
         $contractAddress = $trc20 instanceof TronTRC20 ? $trc20->address : $trc20;
         $contract = $node->api()->getTRC20Contract($contractAddress);
         $address = $address instanceof TronAddress ? $address->address : $address;
+
+        $decimals ??= $trc20 instanceof TronTRC20 ? $trc20->decimals : null;
+        if ($decimals !== null) {
+            $contract->withDecimals($decimals);
+        }
 
         return $contract->balanceOf($address);
     }

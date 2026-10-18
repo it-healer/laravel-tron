@@ -171,6 +171,32 @@ return [
 ];
 ```
 
+### Skipping unchanged history (change detection)
+
+A scheduled sync reads the TRX balance, the TRC20 balances and the account resources, and
+skips the transfer history (`v1/accounts/{address}/transactions` and `.../trc20`) when the
+balances are the same as at the last history read — any transfer in or out and any fee changes
+one of them. The history is still read:
+
+- on forced syncs (`AddressSync` with `force: true`, `tron:address-sync`);
+- for `settle_seconds` (600) after a change — the solidity balance and TronGrid's index lag;
+- while a recent deposit has fewer than `confirmations` (20) — confirmations grow only on re-read;
+- at least every `max_skip_seconds` (21600).
+
+```php
+'sync' => [
+    'change_detection' => [
+        'enabled' => env('TRON_SYNC_CHANGE_DETECTION', true),
+        'settle_seconds' => 600,
+        'confirmations' => 20,
+        'max_skip_seconds' => 21600,
+    ],
+],
+```
+
+The state lives in `tron_addresses.scan_state` (publish and run the new migration). Stored
+`tron_trc20.decimals` are reused, so a token balance is a single `triggerconstantcontract` call.
+
 ### Custom Webhook Handler
 
 Create a custom webhook handler to process deposit events:

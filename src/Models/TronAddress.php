@@ -27,6 +27,7 @@ class TronAddress extends Model
         'account_resources',
         'touch_at',
         'available',
+        'scan_state',
     ];
 
     protected $appends = [
@@ -52,6 +53,7 @@ class TronAddress extends Model
         'account_resources' => 'json',
         'touch_at' => 'datetime',
         'available' => 'boolean',
+        'scan_state' => 'json',
     ];
 
     public function wallet(): BelongsTo

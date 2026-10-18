@@ -2,6 +2,27 @@
 
 All notable changes to `laravel-tron` will be documented in this file.
 
+## v1.9.0 - 2026-10-18
+
+### Added
+
+- Change detection for scheduled syncs (`tron.sync.change_detection`, on by default): the transfer
+  history is skipped when the TRX and TRC20 balances are unchanged since the last history read.
+  It is still read on forced syncs, for `settle_seconds` after a change, while a recent deposit is
+  below `confirmations`, and at least every `max_skip_seconds`. **New migration**
+  `add_scan_state_to_tron_addresses_table` — publish and run it.
+
+### Changed
+
+- A TRC20 balance read reuses the stored `tron_trc20.decimals` instead of calling `decimals()`
+  every time (one request instead of two).
+
+### Fixed
+
+- The daily `requests` counter of a node counted most requests twice: every HTTP request is
+  already counted by `TronNode::recordRequest()`, and the old manual `increment('requests', N)`
+  calls were added on top. They are removed.
+
 ## v1.6.6 - 2026-10-15
 
 ### Fixed

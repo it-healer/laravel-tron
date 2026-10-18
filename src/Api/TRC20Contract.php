@@ -58,6 +58,16 @@ class TRC20Contract
         return $this->symbol;
     }
 
+    /**
+     * Use already known decimals instead of asking the contract (one request less).
+     */
+    public function withDecimals(int $decimals): static
+    {
+        $this->decimals = $decimals;
+
+        return $this;
+    }
+
     public function decimals(): int
     {
         if ($this->decimals === null) {

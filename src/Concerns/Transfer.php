@@ -23,7 +23,6 @@ trait Transfer
     ): TransferPreviewDTO
     {
         $node = $from->wallet->node ?? Tron::getNode();
-        $node->increment('requests', 4);
 
         return $node
             ->api()
@@ -34,7 +33,6 @@ trait Transfer
     public function transfer(TronAddress $from, string $to, BigDecimal|float|int|string $amount): TransferSendDTO
     {
         $node = $from->wallet->node ?? Tron::getNode();
-        $node->increment('requests', 5);
 
         return $node
             ->api()
@@ -45,7 +43,6 @@ trait Transfer
     public function transferAll(TronAddress $from, string $to): TransferSendDTO
     {
         $node = $from->wallet->node ?? Tron::getNode();
-        $node->increment('requests', 4);
 
         $preview = $node->api()
             ->transfer($from->address, $to, 1)
@@ -54,7 +51,6 @@ trait Transfer
             throw new \Exception($preview->error);
         }
 
-        $node->increment('requests', 5);
 
         return $node->api()
             ->transfer(
@@ -74,7 +70,6 @@ trait Transfer
     ): TRC20TransferSendDTO
     {
         $node = $from->wallet->node ?? Tron::getNode();
-        $node->increment('requests', 6);
 
         return $node
             ->api()
@@ -95,7 +90,6 @@ trait Transfer
     ): TRC20TransferPreviewDTO
     {
         $node = $from->wallet->node ?? Tron::getNode();
-        $node->increment('requests', 5);
 
         return $node
             ->api()
@@ -111,7 +105,6 @@ trait Transfer
     ): TRC20TransferSendDTO
     {
         $node = $from->wallet->node ?? Tron::getNode();
-        $node->increment('requests', 5);
 
         $preview = $node
             ->api()
@@ -121,7 +114,6 @@ trait Transfer
             throw new \Exception($preview->error);
         }
 
-        $node->increment('requests', 6);
 
         return $node
             ->api()
@@ -143,7 +135,6 @@ trait Transfer
         BigDecimal|float|int|string $feeLimit = 100,
     ): ContractCallPreviewDTO {
         $node = $from->wallet->node ?? Tron::getNode();
-        $node->increment('requests', 4);
 
         return $node->api()
             ->contractCall($from->address, $contract, $functionSelector, $parameter, $callValue, $feeLimit)
@@ -162,7 +153,6 @@ trait Transfer
         BigDecimal|float|int|string $feeLimit = 100,
     ): string {
         $node = $from->wallet->node ?? Tron::getNode();
-        $node->increment('requests', 5);
 
         return $node->api()
             ->contractCall($from->address, $contract, $functionSelector, $parameter, $callValue, $feeLimit)

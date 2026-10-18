@@ -31,6 +31,28 @@ return [
         'slow_interval' => null,
     ],
 
+    'sync' => [
+        /*
+         * Skip the transfer history (v1/accounts/{address}/transactions and .../trc20) on a
+         * scheduled sync when nothing changed: the TRX balance and the TRC20 balances are the
+         * same as at the last history scan (any transfer in or out, and any fee, changes one
+         * of them). Forced syncs always read the history.
+         *
+         * settle_seconds   — after a change, keep reading the history for this long: the
+         *                    balance comes from the solidity node and TronGrid indexes new
+         *                    transfers with a delay.
+         * confirmations    — while a recent deposit has fewer confirmations, keep reading the
+         *                    history: confirmations grow only when it is read again.
+         * max_skip_seconds — read the history at least this often anyway (0 = never force).
+         */
+        'change_detection' => [
+            'enabled' => (bool)env('TRON_SYNC_CHANGE_DETECTION', true),
+            'settle_seconds' => (int)env('TRON_SYNC_CHANGE_SETTLE_SECONDS', 600),
+            'confirmations' => (int)env('TRON_SYNC_CHANGE_CONFIRMATIONS', 20),
+            'max_skip_seconds' => (int)env('TRON_SYNC_CHANGE_MAX_SKIP_SECONDS', 21600),
+        ],
+    ],
+
     /*
      * Sets the handler to be used when Tron Wallet
      * receives a new deposit.

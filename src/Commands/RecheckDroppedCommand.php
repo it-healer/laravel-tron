@@ -44,7 +44,6 @@ class RecheckDroppedCommand extends Command
 
             try {
                 $status = $api->getTransferStatus($transaction->txid);
-                $node->increment('requests', 1);
             } catch (\Exception $e) {
                 $errors++;
                 $this->error($transaction->txid.': '.$e->getMessage());
