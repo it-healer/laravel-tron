@@ -47,6 +47,15 @@ class HttpProvider
     {
         $client = Http::asJson()
             ->acceptJson()
+            ->connectTimeout((int)config('tron.http.connect_timeout', 20))
+            // A failure before the connection is made (DNS did not answer, host unreachable) means
+            // the node never got the request, so it is safe to repeat — broadcasting a transaction too
+            ->retry(
+                max(1, 1 + (int)config('tron.http.retries', 2)),
+                (int)config('tron.http.retry_sleep_ms', 500),
+                fn (\Throwable $e) => self::failedBeforeConnecting($e),
+                false,
+            )
             ->withOptions([
                 'base_uri' => $this->baseUri,
                 'timeout' => $this->timeout,
@@ -69,6 +78,18 @@ class HttpProvider
         }
 
         return $this->decode($body, $statusCode);
+    }
+
+    /**
+     * The request did not reach the node: cURL 6 (could not resolve host), 7 (could not connect)
+     * or 28 while resolving or connecting — matched at the start of the message only. A timeout
+     * after the request was sent is not one. Even a repeated broadcast is the same signed
+     * transaction (same txid): a second copy is rejected as a duplicate.
+     */
+    public static function failedBeforeConnecting(\Throwable $e): bool
+    {
+        return $e instanceof \Illuminate\Http\Client\ConnectionException
+            && preg_match('/^cURL error (6|7): |^cURL error 28: (Resolving|Connection) timed out /', $e->getMessage()) === 1;
     }
 
     protected function decode(string $body, int $status): array
