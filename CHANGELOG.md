@@ -2,6 +2,14 @@
 
 All notable changes to `laravel-tron` will be documented in this file.
 
+## v1.9.2 - 2026-10-19
+
+### Fixed
+
+- A node request is limited to 60 s (`tron.http.timeout`, env `TRON_HTTP_TIMEOUT`). The old default
+  `30000` was read as seconds, so a node that accepted the connection and went silent held the sync for
+  hours. `HttpProvider::$timeout` is now `?int` (null — the config value).
+
 ## v1.9.1 - 2026-10-19
 
 ### Fixed

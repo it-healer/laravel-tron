@@ -126,10 +126,11 @@ return [
     ],
 
     /*
-     * HTTP to nodes: time to resolve and connect, and how many times a request is repeated
+     * HTTP to nodes: time for the whole request (seconds), time to resolve and connect, and how many times a request is repeated
      * when it failed before reaching the server (DNS did not answer, host unreachable) — safe to repeat.
      */
     'http' => [
+        'timeout' => (int)env('TRON_HTTP_TIMEOUT', 60),
         'connect_timeout' => (int)env('TRON_HTTP_CONNECT_TIMEOUT', 20),
         'retries' => (int)env('TRON_HTTP_RETRIES', 2),
         'retry_sleep_ms' => 500,

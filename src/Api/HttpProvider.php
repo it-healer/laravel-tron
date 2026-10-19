@@ -13,7 +13,8 @@ class HttpProvider
         protected readonly array   $headers = [],
         protected readonly ?string $user = null,
         protected readonly ?string $password = null,
-        public readonly int        $timeout = 30000,
+        // Seconds for the whole request; null — `tron.http.timeout`
+        public readonly ?int       $timeout = null,
         protected string           $statusPage = '/',
         protected readonly ?string $proxy = null,
         protected readonly ?\Closure $onRequest = null,
@@ -58,7 +59,7 @@ class HttpProvider
             )
             ->withOptions([
                 'base_uri' => $this->baseUri,
-                'timeout' => $this->timeout,
+                'timeout' => $this->timeout ?? (int)config('tron.http.timeout', 60),
                 'auth' => $this->user && [$this->user, $this->password],
                 'proxy' => $this->formatProxy($this->proxy),
             ])
