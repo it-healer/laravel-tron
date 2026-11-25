@@ -2,9 +2,7 @@
 
 namespace ItHealer\LaravelTron\Services;
 
-use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\App;
-use Illuminate\Support\Facades\Date;
 use ItHealer\LaravelTron\Models\TronWallet;
 
 class WalletSync extends BaseSync
@@ -27,7 +25,7 @@ class WalletSync extends BaseSync
     {
         $addresses = $this->wallet
             ->addresses()
-            ->where('available', true)
+            ->syncable()
             ->get();
 
         foreach ($addresses as $address) {
@@ -49,26 +47,7 @@ class WalletSync extends BaseSync
 
     protected function calculateBalances(): self
     {
-        $balance = BigDecimal::of('0');
-        $trc20 = [];
-
-        $addresses = $this->wallet
-            ->addresses()
-            ->where('available', true)
-            ->get();
-        foreach ($addresses as $address) {
-            $balance = $balance->plus(($address->balance ?: 0));
-            foreach ($address->trc20 as $k => $v) {
-                $current = BigDecimal::of($trc20[$k] ?? 0);
-                $trc20[$k] = $current->plus($v)->__toString();
-            }
-        }
-
-        $this->wallet->update([
-            'sync_at' => Date::now(),
-            'balance' => $balance,
-            'trc20' => $trc20,
-        ]);
+        $this->wallet->recalculateBalances();
 
         return $this;
     }

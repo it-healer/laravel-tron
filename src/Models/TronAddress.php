@@ -2,6 +2,7 @@
 
 namespace ItHealer\LaravelTron\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -55,6 +56,23 @@ class TronAddress extends Model
         'available' => 'boolean',
         'scan_state' => 'json',
     ];
+
+    /**
+     * Addresses that are synchronized and counted in the wallet balance: visible ones and hidden
+     * ones that have been synchronized before (hiding an address must not hide its money).
+     * A hidden address that has never been synchronized (e.g. a reserve created in advance) is skipped.
+     */
+    public function scopeSyncable(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $query) => $query
+            ->where('available', true)
+            ->orWhereNotNull('sync_at'));
+    }
+
+    public function isSyncable(): bool
+    {
+        return $this->available || $this->sync_at !== null;
+    }
 
     public function wallet(): BelongsTo
     {

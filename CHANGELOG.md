@@ -2,6 +2,20 @@
 
 All notable changes to `laravel-tron` will be documented in this file.
 
+## v1.10.0 - 2026-11-25
+
+### Changed
+
+- Hidden addresses (`available = false`) keep their money in the wallet: an address that has been
+  synchronized before is still synchronized and counted in the wallet TRX and TRC-20 balances and
+  pending outgoing transfers. A hidden address that has never been synchronized (a reserve created in
+  advance) is still skipped. Scope `TronAddress::syncable()`, `TronAddress::isSyncable()`.
+
+### Added
+
+- `TronWallet::recalculateBalances()` — recalculate the wallet balances from its addresses
+  (for example, after synchronizing single addresses).
+
 ## v1.9.2 - 2026-10-19
 
 ### Fixed

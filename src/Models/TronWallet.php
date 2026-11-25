@@ -115,13 +115,13 @@ class TronWallet extends Model
 
     /**
      * Aggregated wallet TRX balance minus broadcast-but-unconfirmed outgoing transfers
-     * (amount + fees) across all wallet addresses.
+     * (amount + fees) across all synchronized wallet addresses, hidden ones included.
      */
     protected function availableBalance(): Attribute
     {
         return new Attribute(
             get: function (): string {
-                $pending = \ItHealer\LaravelTron\Services\PendingBalance::forAddresses($this->addresses()->where('available', true)->pluck('address')->all());
+                $pending = \ItHealer\LaravelTron\Services\PendingBalance::forAddresses($this->addresses()->syncable()->pluck('address')->all());
 
                 $native = \Brick\Math\BigDecimal::zero();
                 $fee = \Brick\Math\BigDecimal::zero();
@@ -144,7 +144,7 @@ class TronWallet extends Model
     {
         return new Attribute(
             get: function () {
-                $pending = \ItHealer\LaravelTron\Services\PendingBalance::forAddresses($this->addresses()->where('available', true)->pluck('address')->all());
+                $pending = \ItHealer\LaravelTron\Services\PendingBalance::forAddresses($this->addresses()->syncable()->pluck('address')->all());
 
                 $tokenPending = [];
                 foreach ($pending as $row) {
@@ -178,6 +178,29 @@ class TronWallet extends Model
         $model = config('tron.models.deposit');
 
         return $this->hasMany($model, 'wallet_id');
+    }
+
+    /**
+     * Wallet TRX and TRC-20 balances: the sum over synchronized addresses, hidden ones included.
+     */
+    public function recalculateBalances(): void
+    {
+        $balance = \Brick\Math\BigDecimal::zero();
+        $trc20 = [];
+
+        foreach ($this->addresses()->syncable()->get() as $address) {
+            $balance = $balance->plus($address->balance ?: 0);
+
+            foreach ($address->trc20 ?? [] as $contract => $amount) {
+                $trc20[$contract] = \Brick\Math\BigDecimal::of($trc20[$contract] ?? 0)->plus($amount ?? 0)->__toString();
+            }
+        }
+
+        $this->update([
+            'sync_at' => \Illuminate\Support\Facades\Date::now(),
+            'balance' => $balance,
+            'trc20' => $trc20,
+        ]);
     }
 
     public function unlockWallet(?string $password): void
