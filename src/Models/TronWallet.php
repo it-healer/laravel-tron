@@ -97,6 +97,8 @@ class TronWallet extends Model
                         ->from("$transactionsTable as self_out")
                         ->join("$addressesTable as self_addr", 'self_addr.address', '=', 'self_out.address')
                         ->whereColumn('self_out.txid', "$transactionsTable.txid")
+                        // Same asset only: a swap sends TRX and brings a token in one transaction
+                        ->whereRaw("COALESCE(self_out.trc20_contract_address, '') = COALESCE($transactionsTable.trc20_contract_address, '')")
                         ->where('self_out.type', TronTransactionType::OUTGOING->value)
                         ->where('self_addr.wallet_id', $walletId);
                 });

@@ -2,6 +2,13 @@
 
 All notable changes to `laravel-tron` will be documented in this file.
 
+## v1.11.2 - 2026-11-26
+
+### Fixed
+
+- `TronWallet::transactions()` hides an incoming row of a transfer between the wallet's own addresses only
+  when the outgoing row is of the same asset: the token received by a TRX → token swap was hidden as well.
+
 ## v1.11.1 - 2026-11-26
 
 ### Fixed
