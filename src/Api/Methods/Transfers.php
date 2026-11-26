@@ -7,6 +7,7 @@ use ItHealer\LaravelTron\Api\DTO\TransferDTO;
 use ItHealer\LaravelTron\Api\Enums\Confirmation;
 use ItHealer\LaravelTron\Api\Enums\Direction;
 use ItHealer\LaravelTron\Api\Enums\OrderBy;
+use ItHealer\LaravelTron\Api\Helpers\AddressHelper;
 
 class Transfers implements \Iterator
 {
@@ -137,6 +138,11 @@ class Transfers implements \Iterator
         $this->current = 0;
     }
 
+    /**
+     * Movements of TRX of the address: plain transfers, contract calls with `call_value` and
+     * internal transactions of contracts (see TransferDTO::fromTransaction). Internal transactions
+     * come only with `searchInterval(true)` (the default) and only those to or from the address.
+     */
     protected function request(): array
     {
         $data = $this->manager->request(
@@ -147,13 +153,21 @@ class Transfers implements \Iterator
         $this->fingerprint = $data['meta']['fingerprint'] ?? null;
         $this->hasNext = !!$this->fingerprint;
 
-        return array_values(
-            array_filter(
-                array_map(
-                    fn(array $item) => TransferDTO::fromArray($item),
-                    $data['data']
-                )
-            )
-        );
+        $address = AddressHelper::toBase58($this->address);
+        $transfers = [];
+
+        foreach ($data['data'] ?? [] as $item) {
+            try {
+                $transfer = TransferDTO::fromTransaction($item);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if ($transfer && ($transfer->from === $address || $transfer->to === $address)) {
+                $transfers[] = $transfer;
+            }
+        }
+
+        return $transfers;
     }
 }

@@ -2,6 +2,26 @@
 
 All notable changes to `laravel-tron` will be documented in this file.
 
+## v1.11.0 - 2026-11-26
+
+### Added
+
+- The history of an address includes TRX that moves through contracts: TRX sent with a contract call
+  (`call_value`, for example a TRX → token swap or a bridge deposit; from the address to the contract) and
+  TRX received from a contract by an internal transaction (a token → TRX swap). `TransferDTO::fromTransaction()`
+  parses all three kinds, `Transfers` returns them (internal transactions only to or from the address,
+  `TransferDTO::$internal`). `TransferDTO::fromArray()` still parses plain transfers only.
+- `AddressSync` reads internal transactions (`search_internal`), asks the node once for the block of an
+  internal transfer (its item has none) and makes a deposit of TRX received from a contract.
+
+### Changed
+
+- A row of `tron_transactions` is unique by `txid`, `address` and asset: a TRX → token swap keeps both the
+  TRX row and the token row. **Publish and run the new migration** `add_asset_to_tron_transactions_unique_table`
+  (stored column `asset` = TRC-20 contract or an empty string for TRX, unique `txid, address, asset`).
+- A failed incoming transfer no longer creates a deposit. When one transaction brings the address both TRX
+  and a token, only the first one becomes a deposit (a deposit is unique by address and txid).
+
 ## v1.10.0 - 2026-11-25
 
 ### Changed

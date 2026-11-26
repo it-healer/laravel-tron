@@ -412,7 +412,6 @@ class AddressSync extends BaseSync
         $transfers = $this->api
             ->getTransfers($this->address->address)
             ->limit(200)
-            ->searchInterval(false)
             ->minTimestamp($minTimestamp);
         $this->log('Method v1/accounts/'.$this->address->address.'/transactions finished', 'success');
 
@@ -444,9 +443,18 @@ class AddressSync extends BaseSync
         $type = $transfer->to === $this->address->address ?
             TronTransactionType::INCOMING : TronTransactionType::OUTGOING;
 
+        if ($transfer->internal) {
+            $transfer = $this->withInternalBlock($transfer);
+
+            if ($transfer === null) {
+                return;
+            }
+        }
+
         TronTransaction::updateOrCreate([
             'txid' => $transfer->txid,
             'address' => $this->address->address,
+            'trc20_contract_address' => null,
         ], [
             'type' => $type,
             'time_at' => $transfer->time,
@@ -459,11 +467,12 @@ class AddressSync extends BaseSync
             ...($transfer->blockNumber ? ['dropped_at' => null] : []),
         ]);
 
-        if ($type === TronTransactionType::INCOMING) {
+        if ($type === TronTransactionType::INCOMING && $transfer->success && ! $this->hasOtherDeposit($transfer->txid, null)) {
             $deposit = $this->address
                 ->deposits()
                 ->updateOrCreate([
                     'txid' => $transfer->txid,
+                    'trc20_id' => null,
                 ], [
                     'wallet_id' => $this->address->wallet_id,
                     'amount' => $transfer->value,
@@ -481,6 +490,74 @@ class AddressSync extends BaseSync
         }
     }
 
+    /**
+     * An internal transaction of a contract comes without a block number, so it is asked from the
+     * node once (gettransactioninfobyid) and then taken from the stored row. Null — skip it for now:
+     * the node has not answered or the row of this txid is the outgoing call of the address itself
+     * (the TRX it sent is kept, a refund in the same transaction is not shown).
+     */
+    protected function withInternalBlock(TransferDTO $transfer): ?TransferDTO
+    {
+        $stored = TronTransaction::query()
+            ->where('txid', $transfer->txid)
+            ->where('address', $this->address->address)
+            ->whereNull('trc20_contract_address')
+            ->first();
+
+        if ($stored && $stored->type === TronTransactionType::OUTGOING) {
+            return null;
+        }
+
+        $blockNumber = $stored?->block_number;
+        $success = $transfer->success;
+
+        if ($blockNumber === null) {
+            try {
+                $status = $this->api->getTransferStatus($transfer->txid);
+            } catch (\Exception $e) {
+                $this->log('Internal transfer '.$transfer->txid.': error resolving block, will retry: '.$e->getMessage());
+
+                return null;
+            }
+
+            if (!$status['blockNumber']) {
+                return null;
+            }
+
+            $blockNumber = $status['blockNumber'];
+            $success = $success && !$status['failed'];
+        }
+
+        return new TransferDTO(
+            data: $transfer->data,
+            txid: $transfer->txid,
+            time: $transfer->time,
+            success: $success,
+            blockNumber: (int) $blockNumber,
+            from: $transfer->from,
+            to: $transfer->to,
+            value: $transfer->value,
+            internal: true,
+        );
+    }
+
+    /**
+     * A deposit is unique by address and txid, so when one transaction brings the address both TRX
+     * and a token (rare: a contract paying out both), only the first one becomes a deposit.
+     */
+    protected function hasOtherDeposit(string $txid, ?int $trc20Id): bool
+    {
+        return $this->address
+            ->deposits()
+            ->where('txid', $txid)
+            ->when(
+                $trc20Id === null,
+                fn ($query) => $query->whereNotNull('trc20_id'),
+                fn ($query) => $query->where(fn ($query) => $query->whereNull('trc20_id')->orWhere('trc20_id', '!=', $trc20Id)),
+            )
+            ->exists();
+    }
+
     protected function handlerTRC20Transfer(TRC20TransferDTO $transfer): void
     {
         if (!in_array($transfer->contractAddress, $this->trc20Addresses)) {
@@ -493,6 +570,7 @@ class AddressSync extends BaseSync
         $transaction = TronTransaction::updateOrCreate([
             'txid' => $transfer->txid,
             'address' => $this->address->address,
+            'trc20_contract_address' => $transfer->contractAddress,
         ], [
             'type' => $type,
             'time_at' => $transfer->time,
@@ -529,11 +607,12 @@ class AddressSync extends BaseSync
 
         if ($type === TronTransactionType::INCOMING) {
             $trc20 = TronTRC20::whereAddress($transfer->contractAddress)->first();
-            if ($trc20) {
+            if ($trc20 && ! $this->hasOtherDeposit($transfer->txid, $trc20->id)) {
                 $deposit = $this->address
                     ->deposits()
                     ->updateOrCreate([
                         'txid' => $transfer->txid,
+                        'trc20_id' => $trc20->id,
                     ], [
                         'wallet_id' => $this->address->wallet_id,
                         'trc20_id' => $trc20->id,

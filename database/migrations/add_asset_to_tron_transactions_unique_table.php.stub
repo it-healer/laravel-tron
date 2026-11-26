@@ -1,0 +1,37 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * One transaction may move TRX and a TRC-20 token for the same address (a TRX → token swap:
+ * TRX goes out with the contract call, the token comes in), so a row is unique by the asset too.
+ * `asset` is the TRC-20 contract or an empty string for TRX (a nullable column would not keep
+ * TRX rows unique).
+ */
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::table('tron_transactions', function (Blueprint $table) {
+            $table->string('asset', 64)->storedAs("COALESCE(trc20_contract_address, '')")->after('trc20_contract_address');
+        });
+
+        Schema::table('tron_transactions', function (Blueprint $table) {
+            $table->unique(['txid', 'address', 'asset']);
+            $table->dropUnique(['txid', 'address']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('tron_transactions', function (Blueprint $table) {
+            $table->unique(['txid', 'address']);
+            $table->dropUnique(['txid', 'address', 'asset']);
+        });
+
+        Schema::table('tron_transactions', function (Blueprint $table) {
+            $table->dropColumn('asset');
+        });
+    }
+};
