@@ -427,7 +427,12 @@ class AddressSync extends BaseSync
             'touch_at' => $this->address->touch_at ?: Date::now(),
         ]);
 
-        foreach ($transfers as $item) {
+        // Calls of the address first: a refund to it by an internal transaction of its own call
+        // is then skipped (withInternalBlock) instead of becoming a deposit.
+        $items = iterator_to_array($transfers, false);
+        usort($items, fn (TransferDTO $a, TransferDTO $b) => $a->internal <=> $b->internal);
+
+        foreach ($items as $item) {
             $this->handleTransfer($item);
         }
 
@@ -449,6 +454,10 @@ class AddressSync extends BaseSync
             if ($transfer === null) {
                 return;
             }
+        }
+
+        if (! $transfer->internal && $type === TronTransactionType::OUTGOING) {
+            $this->forgetInternalDeposit($transfer->txid);
         }
 
         TronTransaction::updateOrCreate([
@@ -509,7 +518,7 @@ class AddressSync extends BaseSync
         }
 
         $blockNumber = $stored?->block_number;
-        $success = $transfer->success;
+        $success = $transfer->success && ! ($stored?->failed ?? false);
 
         if ($blockNumber === null) {
             try {
@@ -539,6 +548,25 @@ class AddressSync extends BaseSync
             value: $transfer->value,
             internal: true,
         );
+    }
+
+    /**
+     * The address called the contract itself: TRX it got back in the same transaction (an internal
+     * transaction stored earlier, for example on the previous page) is a refund, not a deposit.
+     */
+    protected function forgetInternalDeposit(string $txid): void
+    {
+        $stored = TronTransaction::query()
+            ->where('txid', $txid)
+            ->where('address', $this->address->address)
+            ->whereNull('trc20_contract_address')
+            ->where('type', TronTransactionType::INCOMING)
+            ->first();
+
+        if ($stored && ($stored->debug_data['internal'] ?? false)) {
+            $this->address->deposits()->where('txid', $txid)->whereNull('trc20_id')->delete();
+            $this->webhooks = array_values(array_filter($this->webhooks, fn ($deposit) => $deposit->txid !== $txid || $deposit->trc20_id !== null));
+        }
     }
 
     /**

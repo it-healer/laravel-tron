@@ -2,6 +2,14 @@
 
 All notable changes to `laravel-tron` will be documented in this file.
 
+## v1.11.1 - 2026-11-26
+
+### Fixed
+
+- TRX a contract returns to the address within the address's own call (a refund) is no longer a deposit:
+  calls are handled before internal transactions, and an internal deposit of the same transaction is removed.
+- An internal transfer whose transaction the node reported failed stays failed on later syncs.
+
 ## v1.11.0 - 2026-11-26
 
 ### Added
