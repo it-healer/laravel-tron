@@ -19,7 +19,8 @@ trait Transfer
         string $to,
         BigDecimal|float|int|string $amount,
         BigDecimal|float|int|string|null $balance = null,
-        ?int $bandwidth = null
+        ?int $bandwidth = null,
+        bool $toActivated = false,
     ): TransferPreviewDTO
     {
         $node = $from->wallet->node ?? Tron::getNode();
@@ -27,7 +28,7 @@ trait Transfer
         return $node
             ->api()
             ->transfer($from->address, $to, $amount)
-            ->preview($balance, $bandwidth);
+            ->preview($balance, $bandwidth, $toActivated);
     }
 
     public function transfer(TronAddress $from, string $to, BigDecimal|float|int|string $amount): TransferSendDTO

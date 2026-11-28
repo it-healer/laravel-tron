@@ -22,9 +22,14 @@ class Transfer
     {
     }
 
+    /**
+     * @param  bool  $toActivated  The recipient is activated by an earlier transfer of the same
+     *                             batch (several recipients previewed one after another)
+     */
     public function preview(
         BigDecimal|float|int|string|null $balance = null,
-        ?int $bandwidth = null
+        ?int $bandwidth = null,
+        bool $toActivated = false,
     ): TransferPreviewDTO
     {
         if( $this->preview !== null ) {
@@ -58,8 +63,14 @@ class Transfer
             }
             $balanceAfter = $balanceBefore->minus($this->amount);
 
-            if (!$to->activated) {
-                $activateFee = AmountHelper::sunToDecimal($this->api->chainParameter('getCreateAccountFee', 100000));
+            $creates = !$to->activated && !$toActivated;
+
+            // A new account costs the system contract fee (1 TRX) plus its bandwidth, which is
+            // burned (getCreateAccountFee, 0.1 TRX) unless the sender has enough staked bandwidth:
+            // free bandwidth is never used for it. Until the transaction size is known, assume burning
+            if ($creates) {
+                $activateFee = AmountHelper::sunToDecimal($this->api->chainParameter('getCreateNewAccountFeeInSystemContract', 1000000))
+                    ->plus(AmountHelper::sunToDecimal($this->api->chainParameter('getCreateAccountFee', 100000)));
                 $balanceAfter = $balanceAfter->minus($activateFee);
             }
 
@@ -74,7 +85,18 @@ class Transfer
                     'amount' => AmountHelper::decimalToSun($this->amount),
                 ]);
 
-                $bandwidthRequired = $to->activated ? strlen($transaction['raw_data_hex']) + 1 : 0;
+                $size = strlen($transaction['raw_data_hex']) + 1;
+                $bandwidthRequired = $creates ? 0 : $size;
+
+                if ($creates) {
+                    $staked = (int) ($fromResources->data['NetLimit'] ?? 0) - (int) ($fromResources->data['NetUsed'] ?? 0);
+
+                    if ($staked >= $size * (int) $this->api->chainParameter('getCreateNewAccountBandwidthRate', 1)) {
+                        $burn = AmountHelper::sunToDecimal($this->api->chainParameter('getCreateAccountFee', 100000));
+                        $activateFee = $activateFee->minus($burn);
+                        $balanceAfter = $balanceAfter->plus($burn);
+                    }
+                }
                 if( $bandwidthBefore === null ) {
                     $bandwidthBefore = $fromResources->bandwidthAvailable;
                 }
